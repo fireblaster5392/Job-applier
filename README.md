@@ -14,6 +14,12 @@ Job application automation, following `architecture/job-automation-architecture.
    - If scoring or tailoring fails, the job is sent as a plain alert with a **Tailor** button.
 3. **Edit** opens the dashboard, where you can change the summary, bullets, skills and cover letter.
 4. **Approve** marks the job approved. Nothing is submitted anywhere yet; auto-apply is the next step.
+5. **Outreach** starts after you approve: it finds up to 3 people at the company (hiring manager
+   first, then engineers, then recruiters) through Brave Search and Apollo, and Claude drafts a
+   LinkedIn note and an email for each. Telegram shows each draft:
+   - **LinkedIn notes** are in a tap-to-copy block with an "Open profile" button. You send them
+     yourself; nothing ever logs into your LinkedIn.
+   - **Emails** go out only when you tap **Send email**, with a daily cap (`max_emails_per_day`).
 
 Tailoring may only pick and lightly reword bullets from `profile/resume.yaml`. Guardrails drop any
 bullet id that doesn't exist, revert rewrites that add numbers, and drop skills you don't list.
@@ -33,7 +39,7 @@ Set `[pipeline] mode = "manual"` in `config.toml` to get every match in Telegram
 | `bot/` | Telegram button handler | Built |
 | `web/` | Approval queue + dashboard (FastAPI) | Built |
 | `apply/` | Greenhouse / Lever / Ashby form adapters, stop before Submit | Next |
-| `outreach/` | Contact finding + message drafts (you send) | Later |
+| `outreach/` | Contact finding, message drafts, email sending on your tap | Built |
 | `mail/` | Gmail reply tracking + classifier | Later |
 | `data/` | SQLite database (git-ignored) | |
 

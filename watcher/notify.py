@@ -96,3 +96,18 @@ class Notifier:
         except httpx.HTTPError as exc:
             log.error("telegram send failed for %s: %s", job.key, exc)
             return False
+
+    async def send_text(self, text: str, buttons: list | None = None) -> bool:
+        if self.dry_run:
+            print(f"\n{text}\n")
+            return True
+        payload = {"chat_id": self.chat_id, "text": text, "parse_mode": "HTML", "disable_web_page_preview": True}
+        if buttons:
+            payload["reply_markup"] = {"inline_keyboard": buttons}
+        try:
+            resp = await self.client.post(API.format(token=self.token, method="sendMessage"), json=payload)
+            resp.raise_for_status()
+            return True
+        except httpx.HTTPError as exc:
+            log.error("telegram send failed: %s", exc)
+            return False

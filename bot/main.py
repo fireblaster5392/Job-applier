@@ -13,6 +13,8 @@ import os
 
 import httpx
 
+from outreach.mailer import SmtpMailer
+from outreach.store import send_email_message, skip_message
 from profile_mcp.profile import Profile
 from tailor.claude import DEFAULT_MODEL
 from tailor.pipeline import tailor_job
@@ -26,10 +28,12 @@ API = "https://api.telegram.org/bot{token}/{method}"
 class Bot:
     def __init__(self, store: JobStore, client: httpx.AsyncClient, *, token: str, chat_id: str,
                  profile_loader=Profile.load, model: str = DEFAULT_MODEL, dashboard_url: str = "",
-                 tailor=tailor_job, store_factory=None):
+                 tailor=tailor_job, store_factory=None, mailer=None, max_emails_per_day: int = 10):
         self.store, self.client = store, client
         # Tailoring runs in a worker thread, which needs its own sqlite connection.
         self.store_factory = store_factory or (lambda: store)
+        self.mailer = mailer or SmtpMailer()
+        self.max_emails_per_day = max_emails_per_day
         self.token, self.chat_id = token, str(chat_id)
         self.profile_loader, self.model = profile_loader, model
         self.dashboard_url = dashboard_url.rstrip("/")
@@ -62,6 +66,9 @@ class Bot:
             await self.call("answerCallbackQuery", callback_query_id=cq["id"])
             return
         action, _, raw_id = (cq.get("data") or "").partition(":")
+        if action in ("email", "noemail") and raw_id.isdigit():
+            await self.on_email(cq, action, int(raw_id))
+            return
         job = self.store.get_job(int(raw_id)) if raw_id.isdigit() else None
         if job is None:
             await self.call("answerCallbackQuery", callback_query_id=cq["id"], text="Job not found")
@@ -89,6 +96,24 @@ class Bot:
             task.add_done_callback(self.tasks.discard)
         else:
             await self.call("answerCallbackQuery", callback_query_id=cq["id"])
+
+    async def on_email(self, cq: dict, action: str, msg_id: int) -> None:
+        if action == "noemail":
+            skip_message(self.store, msg_id)
+            await self.ack(cq, "Not sent")
+            return
+        await self.call("answerCallbackQuery", callback_query_id=cq["id"], text="Sending…")
+        result = await asyncio.to_thread(send_email_message, self.store_factory(), msg_id,
+                                         self.mailer, self.max_emails_per_day)
+        sent = result.startswith("Sent") or result == "Already sent."
+        msg = cq.get("message") or {}
+        if msg.get("message_id"):
+            label = "✅ Sent" if sent else "Send email (retry)"
+            data = "noop:" if sent else f"email:{msg_id}"
+            await self.call("editMessageReplyMarkup", chat_id=self.chat_id, message_id=msg["message_id"],
+                            reply_markup={"inline_keyboard": [[{"text": label, "callback_data": data}]]})
+        if not sent:
+            await self.send(html.escape(result))
 
     async def ack(self, cq: dict, text: str) -> None:
         await self.call("answerCallbackQuery", callback_query_id=cq["id"], text=text)
@@ -131,7 +156,8 @@ async def run(db_path: str, cfg_path: str) -> None:
         bot = Bot(JobStore(db_path), client, token=token, chat_id=chat_id,
                   model=cfg.get("tailor", {}).get("model", DEFAULT_MODEL),
                   dashboard_url=os.environ.get("DASHBOARD_URL", ""),
-                  store_factory=lambda: JobStore(db_path))
+                  store_factory=lambda: JobStore(db_path),
+                  max_emails_per_day=cfg.get("outreach", {}).get("max_emails_per_day", 10))
         log.info("bot running")
         while True:
             try:

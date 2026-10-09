@@ -37,6 +37,7 @@ CREATE TABLE IF NOT EXISTS jobs (
                                     -- | approved | rejected | skipped | failed
     score        INTEGER,           -- quick fit score 0-100 (auto mode)
     score_reasons TEXT,             -- JSON list
+    outreach_at  TEXT,              -- when contacts were found and drafts sent to you
     last_error   TEXT,
     raw          TEXT,
     PRIMARY KEY (ats, company, job_id)
@@ -50,6 +51,30 @@ CREATE TABLE IF NOT EXISTS tailored (
     data         TEXT NOT NULL,         -- TailoredApplication JSON
     warnings     TEXT,                  -- guardrail fixes, JSON list
     usage        TEXT                   -- token usage, JSON
+);
+
+CREATE TABLE IF NOT EXISTS contacts (
+    id           INTEGER PRIMARY KEY,
+    job_rowid    INTEGER NOT NULL,
+    name         TEXT NOT NULL,
+    title        TEXT,
+    linkedin_url TEXT,
+    email        TEXT,
+    source       TEXT,
+    rank         INTEGER,
+    created_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS messages (
+    id           INTEGER PRIMARY KEY,
+    contact_id   INTEGER NOT NULL,
+    channel      TEXT NOT NULL,     -- linkedin (you send it yourself) | email
+    subject      TEXT,
+    body         TEXT NOT NULL,
+    status       TEXT NOT NULL DEFAULT 'draft',   -- draft | sending | sent | skipped | failed
+    error        TEXT,
+    sent_at      TEXT,
+    created_at   TEXT NOT NULL
 );
 
 CREATE INDEX IF NOT EXISTS jobs_first_seen ON jobs (first_seen);

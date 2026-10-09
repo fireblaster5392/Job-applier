@@ -108,6 +108,31 @@ JOB = """{% extends "base" %}
 <div class="card"><h3 style="margin-top:0">Cover letter <a href="/jobs/{{ job.rowid }}/cover-letter" target="_blank" style="font-size:14px">open to print</a></h3>
 <iframe src="/jobs/{{ job.rowid }}/cover-letter" title="Cover letter" style="height:700px"></iframe></div>
 {% endif %}
+{% if outreach %}
+<div class="card" id="outreach"><h3 style="margin-top:0">Outreach</h3>
+{% for o in outreach %}
+  <p><b>{{ o.contact.name }}</b>, {{ o.contact.title }}
+  {% if o.contact.linkedin_url %} · <a href="{{ o.contact.linkedin_url }}" target="_blank">LinkedIn</a>{% endif %}
+  {% if o.contact.email %} · {{ o.contact.email }}{% endif %}</p>
+  {% for m in o.messages %}
+  {% if m.channel == "linkedin" %}
+  <div class="muted">LinkedIn note, for you to send yourself:</div><pre>{{ m.body }}</pre>
+  {% else %}
+  <div class="muted">Email · <span class="status">{{ m.status }}</span>{% if m.error %} <span style="color:var(--bad)">{{ m.error }}</span>{% endif %}</div>
+  <pre><b>{{ m.subject }}</b>
+
+{{ m.body }}</pre>
+  {% if m.status in ("draft", "failed") %}
+  <div class="actions">
+    <form method="post" action="/messages/{{ m.id }}/send"><button class="primary">Send email</button></form>
+    <form method="post" action="/messages/{{ m.id }}/skip"><button>Don't send</button></form>
+  </div>
+  {% endif %}
+  {% endif %}
+  {% endfor %}
+{% endfor %}
+</div>
+{% endif %}
 {% if t and t.description %}<div class="card"><h3 style="margin-top:0">Job description</h3><pre>{{ t.description }}</pre></div>{% endif %}
 {% endblock %}"""
 

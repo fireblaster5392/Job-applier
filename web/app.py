@@ -10,6 +10,8 @@ import threading
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from outreach.mailer import SmtpMailer
+from outreach.store import get_message, outreach_for_job, send_email_message, skip_message
 from profile_mcp.profile import Profile
 from tailor.claude import DEFAULT_MODEL
 from tailor.pipeline import tailor_job
@@ -25,7 +27,7 @@ SETTABLE = {"approved", "rejected", "skipped", "discovered"}
 
 
 def create_app(db_path: str, profile_loader=Profile.load, tailor=tailor_job,
-               model: str = DEFAULT_MODEL) -> FastAPI:
+               model: str = DEFAULT_MODEL, mailer=None, max_emails_per_day: int = 10) -> FastAPI:
     app = FastAPI(title="Job pipeline")
     store = JobStore(db_path)
     lock = threading.Lock()  # request handlers share one sqlite connection
@@ -58,7 +60,26 @@ def create_app(db_path: str, profile_loader=Profile.load, tailor=tailor_job,
         job = job_or_404(rowid)
         with lock:
             t = store.get_tailored(rowid)
-        return env.get_template("job").render(job=job, t=t)
+            outreach = outreach_for_job(store, rowid)
+        return env.get_template("job").render(job=job, t=t, outreach=outreach)
+
+    @app.post("/messages/{msg_id}/send")
+    def send_message(msg_id: int):
+        with lock:
+            m = get_message(store, msg_id)
+            if m is None:
+                raise HTTPException(404, "Message not found")
+            send_email_message(store, msg_id, mailer or SmtpMailer(), max_emails_per_day)
+        return RedirectResponse(f"/jobs/{m['job_rowid']}#outreach", status_code=303)
+
+    @app.post("/messages/{msg_id}/skip")
+    def skip(msg_id: int):
+        with lock:
+            m = get_message(store, msg_id)
+            if m is None:
+                raise HTTPException(404, "Message not found")
+            skip_message(store, msg_id)
+        return RedirectResponse(f"/jobs/{m['job_rowid']}#outreach", status_code=303)
 
     @app.get("/jobs/{rowid}/edit", response_class=HTMLResponse)
     def edit_page(rowid: int):
@@ -132,4 +153,5 @@ def main_app() -> FastAPI:
     cfg_path = os.environ.get("CONFIG_PATH", "config.toml")
     cfg = load_config(cfg_path) if os.path.exists(cfg_path) else {}
     return create_app(os.environ.get("DB_PATH", "data/jobs.db"),
-                      model=cfg.get("tailor", {}).get("model", DEFAULT_MODEL))
+                      model=cfg.get("tailor", {}).get("model", DEFAULT_MODEL),
+                      max_emails_per_day=cfg.get("outreach", {}).get("max_emails_per_day", 10))

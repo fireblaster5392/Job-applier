@@ -12,12 +12,16 @@ so nothing is missed.
 """
 import argparse
 import asyncio
+import html
 import logging
 import os
 import re
 
 import httpx
 
+from outreach.draft import draft_messages
+from outreach.finder import find_contacts
+from outreach.store import jobs_needing_outreach, save_outreach
 from profile_mcp.profile import Profile
 from tailor.claude import DEFAULT_MODEL
 from tailor.pipeline import tailor_job
@@ -47,14 +51,66 @@ class Worker:
         self.tailor_model = cfg.get("tailor", {}).get("model", DEFAULT_MODEL)
         self.store, self.notifier = store, notifier
         self.profile_loader, self.dashboard_url = profile_loader, dashboard_url
+        o = cfg.get("outreach", {})
+        self.outreach_on = o.get("enabled", True)
+        self.outreach_statuses = o.get("trigger_statuses", ["approved"])
+        self.max_contacts = o.get("max_contacts", 3)
+        self.outreach_model = o.get("model", DEFAULT_MODEL)
         self.claude, self.http_client = claude, http_client   # injectable for tests
+        self.find_contacts = find_contacts
 
     async def run_once(self) -> dict:
-        stats = {"tailored": 0, "below": 0, "fallback": 0, "resent": 0}
+        stats = {"tailored": 0, "below": 0, "fallback": 0, "resent": 0, "outreach": 0}
         for job in self.store.jobs_to_score():
             stats[await self.handle(job)] += 1
         stats["resent"] = await self.resend_unsent()
+        if self.outreach_on:
+            for row in jobs_needing_outreach(self.store, self.outreach_statuses):
+                await self.outreach(row)
+                stats["outreach"] += 1
         return stats
+
+    async def outreach(self, row) -> None:
+        """Find contacts for an approved job, draft messages, and send them to you to review.
+        Emails go out only when you tap Send; LinkedIn notes are for you to paste yourself."""
+        e = html.escape
+        label = f"{row['title']} at {row['company']}"
+        try:
+            contacts = await asyncio.to_thread(self.find_contacts, row["company"], "", limit=self.max_contacts)
+            drafts = {}
+            if contacts:
+                rec = self.store.get_tailored(row["rowid"])
+                fit = "; ".join(rec["data"]["fit_reasons"]) if rec else ""
+                drafts = await asyncio.to_thread(
+                    draft_messages, {"title": row["title"], "company": row["company"],
+                                     "location": row["location"], "fit_notes": fit},
+                    contacts, self.profile_loader(), model=self.outreach_model, client=self.claude)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("outreach failed for %s: %s", label, exc)
+            self.store.conn.execute("UPDATE jobs SET outreach_at='failed' WHERE rowid=?", (row["rowid"],))
+            self.store.conn.commit()
+            await self.notifier.send_text(f"⚠️ Couldn't prepare outreach for <b>{e(label)}</b>: {e(str(exc))}")
+            return
+
+        saved = save_outreach(self.store, row["rowid"], contacts, drafts)
+        if not saved:
+            await self.notifier.send_text(f"🔎 No contacts found for <b>{e(label)}</b>.")
+            return
+        await self.notifier.send_text(f"🤝 Outreach for <b>{e(label)}</b>: {len(saved)} contact(s) below.")
+        for i, item in enumerate(saved):
+            c, d = item["contact"], drafts.get(i)
+            head = f"👤 <b>{e(c.name)}</b>, {e(c.title or 'title unknown')}"
+            if item["linkedin_msg_id"] and d:
+                await self.notifier.send_text(
+                    f"{head}\nLinkedIn note (tap to copy, then send it yourself):\n<code>{e(d.linkedin_note)}</code>",
+                    [[{"text": "Open LinkedIn profile", "url": c.linkedin_url}]])
+            if item["email_msg_id"] and d:
+                await self.notifier.send_text(
+                    f"{head}\n📧 Email to {e(c.email)}\n<b>Subject:</b> {e(d.email_subject)}\n\n{e(d.email_body)}",
+                    [[{"text": "📧 Send email", "callback_data": f"email:{item['email_msg_id']}"},
+                      {"text": "Don't send", "callback_data": f"noemail:{item['email_msg_id']}"}]])
+            if not d:
+                await self.notifier.send_text(f"{head}\nNo draft for this contact.")
 
     async def resend_unsent(self) -> int:
         """Retry messages that failed to send (e.g. Telegram was down)."""
