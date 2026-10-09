@@ -1,0 +1,38 @@
+# Runs on a small always-on VPS: `docker compose up -d`, logs with `docker compose logs -f watcher`.
+# Services for later steps are commented out until they're built.
+services:
+  watcher:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./config.toml:/app/config.toml:ro
+
+  # web:        # step 3: approval queue + dashboard
+  #   build: .
+  #   command: uvicorn web.app:app --host 0.0.0.0 --port 8000
+  #   env_file: .env
+  #   volumes: ["./data:/app/data"]
+  #   ports: ["127.0.0.1:8000:8000"]   # reach it over Tailscale, not the public internet
+
+  # bot:        # step 3: Telegram Approve / Skip buttons
+  #   build: .
+  #   command: python -m bot.main
+  #   env_file: .env
+  #   volumes: ["./data:/app/data"]
+
+  # mail:       # step 6: Gmail sync + classifier
+  #   build: .
+  #   command: python -m mail.main
+  #   env_file: .env
+  #   volumes: ["./data:/app/data"]
+
+  # postgres:   # switch DATABASE_URL to Postgres once several services write
+  #   image: postgres:17
+  #   restart: unless-stopped
+  #   environment:
+  #     POSTGRES_USER: jobs
+  #     POSTGRES_DB: jobs
+  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+  #   volumes: ["./data/postgres:/var/lib/postgresql/data"]

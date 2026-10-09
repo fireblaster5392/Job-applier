@@ -1,0 +1,27 @@
+# How often to poll every board, in seconds.
+poll_seconds = 60
+# Max boards fetched at the same time.
+concurrency = 8
+
+[filters]
+# A job matches if its title contains any include word (whole word, case-insensitive)
+# and no exclude word. Placeholder targets: swap in your real roles.
+title_include = ["software engineer", "software developer", "backend", "frontend", "full stack",
+                 "fullstack", "machine learning", "ml engineer", "data engineer", "platform engineer",
+                 "infrastructure", "swe", "new grad"]
+title_exclude = ["manager", "director", "principal", "staff", "head of", "vp", "recruiter", "sales"]
+# Substring match against the job location. Empty list = any location.
+locations = ["united states", "usa", "new york", "san francisco", "seattle", "remote"]
+# Remote jobs match even if their location isn't in the list above.
+allow_remote = true
+
+# Starter list of well-known tech companies. Slugs are the board name in each ATS URL,
+# e.g. boards.greenhouse.io/<slug>, jobs.lever.co/<slug>, jobs.ashbyhq.com/<slug>.
+# A wrong slug just logs "board not found" and is skipped.
+[companies]
+greenhouse = ["stripe", "airbnb", "databricks", "figma", "discord", "robinhood", "coinbase",
+              "cloudflare", "dropbox", "anthropic", "gitlab", "reddit", "pinterest", "lyft",
+              "instacart", "brex", "datadog", "mongodb", "twilio", "asana", "duolingo",
+              "scaleai", "vercel", "airtable", "samsara"]
+lever = ["palantir", "plaid", "spotify", "whoop"]
+ashby = ["openai", "notion", "ramp", "linear", "supabase", "replit", "cursor", "deel", "posthog"]

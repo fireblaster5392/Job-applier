@@ -1,0 +1,15 @@
+# Copy to answers.yaml and fill in. Legal answers are used verbatim, never generated.
+name: ""
+email: ""
+phone: ""
+location: ""
+links:
+  linkedin: ""
+  github: ""
+  portfolio: ""
+work_authorization: ""      # e.g. "Canadian citizen; requires TN for US roles"
+requires_sponsorship: null  # true / false
+notice_period: ""
+salary_expectation: ""
+standard_answers:
+  why_this_company: ""
