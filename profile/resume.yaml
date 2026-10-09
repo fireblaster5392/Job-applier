@@ -1,0 +1,61 @@
+# PLACEHOLDER PROFILE. Replace with your real resume (or upload it and Claude will convert it).
+# Rules: every bullet has a stable id and tags. Tailoring may only select and lightly
+# reword these bullets; it can never add a fact, number or skill that isn't here.
+
+basics:
+  name: Alex Placeholder
+  email: alex@example.com
+  phone: "+1 555 0100"
+  location: Calgary, AB
+  links:
+    - {label: GitHub, url: "https://github.com/example"}
+    - {label: LinkedIn, url: "https://linkedin.com/in/example"}
+  summary: >-
+    Software engineer focused on backend systems and data pipelines.
+
+experience:
+  - company: Example Corp
+    title: Software Engineer
+    location: Calgary, AB
+    start: 2024-05
+    end: present
+    bullets:
+      - id: exco-api
+        text: Built a Python/FastAPI service handling 2M requests a day for internal billing.
+        tags: [python, fastapi, backend, api]
+      - id: exco-pipeline
+        text: Cut nightly ETL runtime from 3 hours to 25 minutes by moving it to incremental Spark jobs.
+        tags: [spark, data-engineering, etl, performance]
+      - id: exco-oncall
+        text: Led on-call rotation for 4 services and wrote runbooks that halved incident resolution time.
+        tags: [reliability, oncall, leadership]
+  - company: Startup Inc
+    title: Software Engineering Intern
+    location: Remote
+    start: 2023-05
+    end: 2023-08
+    bullets:
+      - id: st-react
+        text: Shipped a React dashboard used by 300 customers to track shipments in real time.
+        tags: [react, typescript, frontend]
+      - id: st-tests
+        text: Raised backend test coverage from 40% to 85% with pytest and CI checks.
+        tags: [python, testing, ci]
+
+projects:
+  - name: Job Watcher
+    url: "https://github.com/example/job-watcher"
+    bullets:
+      - id: proj-watcher
+        text: Async Python service polling 40 job boards every 60 seconds with SQLite dedupe and Telegram alerts.
+        tags: [python, asyncio, sqlite, automation]
+
+education:
+  - school: University of Calgary
+    degree: BSc Computer Science
+    end: 2025
+
+skills:
+  languages: [Python, TypeScript, SQL, Go]
+  frameworks: [FastAPI, React, Spark, pytest]
+  tools: [Docker, PostgreSQL, AWS, Git]

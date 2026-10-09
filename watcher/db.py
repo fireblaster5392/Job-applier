@@ -33,8 +33,20 @@ CREATE TABLE IF NOT EXISTS jobs (
     is_new       INTEGER NOT NULL DEFAULT 0,  -- 0 = backlog from the board's first poll
     notified_at  TEXT,
     status       TEXT NOT NULL DEFAULT 'discovered',
+                                    -- discovered | tailoring | tailored | approved | rejected | skipped | failed
+    last_error   TEXT,
     raw          TEXT,
     PRIMARY KEY (ats, company, job_id)
+);
+
+CREATE TABLE IF NOT EXISTS tailored (
+    job_rowid    INTEGER PRIMARY KEY,   -- jobs.rowid
+    created_at   TEXT NOT NULL,
+    model        TEXT,
+    description  TEXT,                  -- job description the tailoring used
+    data         TEXT NOT NULL,         -- TailoredApplication JSON
+    warnings     TEXT,                  -- guardrail fixes, JSON list
+    usage        TEXT                   -- token usage, JSON
 );
 
 CREATE INDEX IF NOT EXISTS jobs_first_seen ON jobs (first_seen);
@@ -48,7 +60,8 @@ def now() -> str:
 
 class JobStore:
     def __init__(self, path: str):
-        self.conn = sqlite3.connect(path)
+        # check_same_thread=False: the dashboard and bot run tailoring in worker threads.
+        self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
         self.conn.executescript(SCHEMA)
@@ -127,13 +140,64 @@ class JobStore:
     def pending_notifications(self) -> list[Job]:
         """New matching jobs not yet notified, including ones whose send failed earlier."""
         rows = self.conn.execute(
-            "SELECT * FROM jobs WHERE matched=1 AND is_new=1 AND notified_at IS NULL"
+            "SELECT rowid, * FROM jobs WHERE matched=1 AND is_new=1 AND notified_at IS NULL"
             " AND closed_at IS NULL ORDER BY first_seen"
         ).fetchall()
-        return [
-            Job(ats=r["ats"], company=r["company"], job_id=r["job_id"], title=r["title"],
-                location=r["location"] or "", url=r["url"] or "", apply_url=r["apply_url"] or "",
-                department=r["department"] or "", remote=bool(r["remote"]),
-                posted_at=r["posted_at"] or "")
-            for r in rows
-        ]
+        return [row_to_job(r) for r in rows]
+
+    # --- used by the bot, the dashboard and tailoring -------------------------------
+
+    def get_job(self, rowid: int) -> sqlite3.Row | None:
+        return self.conn.execute("SELECT rowid, * FROM jobs WHERE rowid=?", (rowid,)).fetchone()
+
+    def set_status(self, rowid: int, status: str, error: str | None = None) -> None:
+        self.conn.execute("UPDATE jobs SET status=?, last_error=? WHERE rowid=?", (status, error, rowid))
+        self.conn.commit()
+
+    def list_jobs(self, status: str | None = None, matched_only: bool = True,
+                  limit: int = 200) -> list[sqlite3.Row]:
+        where, args = ["1=1"], []
+        if status:
+            where.append("status=?")
+            args.append(status)
+        if matched_only:
+            where.append("matched=1")
+        return self.conn.execute(
+            f"SELECT rowid, * FROM jobs WHERE {' AND '.join(where)} ORDER BY first_seen DESC LIMIT ?",
+            (*args, limit),
+        ).fetchall()
+
+    def status_counts(self) -> dict[str, int]:
+        rows = self.conn.execute(
+            "SELECT status, COUNT(*) AS n FROM jobs WHERE matched=1 GROUP BY status"
+        ).fetchall()
+        return {r["status"]: r["n"] for r in rows}
+
+    def save_tailored(self, rowid: int, *, model: str, description: str, data: dict,
+                      warnings: list[str], usage: dict) -> None:
+        self.conn.execute(
+            """INSERT INTO tailored (job_rowid, created_at, model, description, data, warnings, usage)
+               VALUES (?, ?, ?, ?, ?, ?, ?)
+               ON CONFLICT (job_rowid) DO UPDATE SET created_at=excluded.created_at, model=excluded.model,
+                 description=excluded.description, data=excluded.data, warnings=excluded.warnings,
+                 usage=excluded.usage""",
+            (rowid, now(), model, description, json.dumps(data), json.dumps(warnings), json.dumps(usage)),
+        )
+        self.conn.commit()
+
+    def get_tailored(self, rowid: int) -> dict | None:
+        r = self.conn.execute("SELECT * FROM tailored WHERE job_rowid=?", (rowid,)).fetchone()
+        if not r:
+            return None
+        return {
+            "created_at": r["created_at"], "model": r["model"], "description": r["description"],
+            "data": json.loads(r["data"]), "warnings": json.loads(r["warnings"] or "[]"),
+            "usage": json.loads(r["usage"] or "{}"),
+        }
+
+
+def row_to_job(r: sqlite3.Row) -> Job:
+    return Job(ats=r["ats"], company=r["company"], job_id=r["job_id"], title=r["title"],
+               location=r["location"] or "", url=r["url"] or "", apply_url=r["apply_url"] or "",
+               department=r["department"] or "", remote=bool(r["remote"]),
+               posted_at=r["posted_at"] or "", raw=json.loads(r["raw"] or "{}"), db_id=r["rowid"])

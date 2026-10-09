@@ -9,18 +9,28 @@ services:
       - ./data:/app/data
       - ./config.toml:/app/config.toml:ro
 
-  # web:        # step 3: approval queue + dashboard
-  #   build: .
-  #   command: uvicorn web.app:app --host 0.0.0.0 --port 8000
-  #   env_file: .env
-  #   volumes: ["./data:/app/data"]
-  #   ports: ["127.0.0.1:8000:8000"]   # reach it over Tailscale, not the public internet
+  web:        # approval queue + dashboard
+    build: .
+    restart: unless-stopped
+    command: uvicorn --factory web.app:main_app --host 0.0.0.0 --port 8000
+    env_file: .env
+    environment:
+      DB_PATH: /app/data/jobs.db
+    volumes:
+      - ./data:/app/data
+      - ./profile:/app/profile:ro
+      - ./config.toml:/app/config.toml:ro
+    ports: ["127.0.0.1:8000:8000"]   # reach it over Tailscale, not the public internet
 
-  # bot:        # step 3: Telegram Approve / Skip buttons
-  #   build: .
-  #   command: python -m bot.main
-  #   env_file: .env
-  #   volumes: ["./data:/app/data"]
+  bot:        # Telegram Tailor / Skip / Approve / Reject buttons
+    build: .
+    restart: unless-stopped
+    command: python -m bot.main --db /app/data/jobs.db
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./profile:/app/profile:ro
+      - ./config.toml:/app/config.toml:ro
 
   # mail:       # step 6: Gmail sync + classifier
   #   build: .

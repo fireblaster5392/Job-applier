@@ -15,6 +15,11 @@ locations = ["united states", "usa", "new york", "san francisco", "seattle", "re
 # Remote jobs match even if their location isn't in the list above.
 allow_remote = true
 
+[tailor]
+# Model for resume + cover letter tailoring (about $0.14 a job on Opus 5.5).
+# "claude-sonnet-5-5" roughly halves the cost if the quality holds up for you.
+model = "claude-opus-5-5"
+
 # Starter list of well-known tech companies. Slugs are the board name in each ATS URL,
 # e.g. boards.greenhouse.io/<slug>, jobs.lever.co/<slug>, jobs.ashbyhq.com/<slug>.
 # A wrong slug just logs "board not found" and is skipped.

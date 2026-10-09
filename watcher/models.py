@@ -14,6 +14,7 @@ class Job:
     remote: bool = False
     posted_at: str = ""   # ISO-8601 UTC when the ATS gives one
     raw: dict = field(default_factory=dict, repr=False)
+    db_id: int | None = None  # jobs.rowid once stored
 
     @property
     def key(self) -> tuple[str, str, str]:

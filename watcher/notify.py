@@ -38,8 +38,10 @@ class Notifier:
             print(f"\n[match] {text}\n{job.url}\n")
             return True
         buttons = [[{"text": "Open posting", "url": job.url}]]
-        if job.apply_url and job.apply_url != job.url:
-            buttons[0].append({"text": "Apply", "url": job.apply_url})
+        if job.db_id is not None:
+            # Handled by bot/main.py
+            buttons.append([{"text": "✍️ Tailor resume", "callback_data": f"tailor:{job.db_id}"},
+                            {"text": "Skip", "callback_data": f"skip:{job.db_id}"}])
         try:
             resp = await self.client.post(
                 API.format(token=self.token, method="sendMessage"),

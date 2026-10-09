@@ -2,21 +2,55 @@
 
 Job application automation, following `architecture/job-automation-architecture.md`.
 
+## How it works
+
+1. **Watcher** finds a new job that matches your filters and sends it to Telegram with
+   **Tailor resume** and **Skip** buttons.
+2. **Tailor resume** has Claude pick and lightly reword bullets from `profile/resume.yaml`,
+   write a cover letter and score your fit. Guardrails drop any bullet id that doesn't exist,
+   revert rewrites that add numbers, and drop skills you don't list.
+3. Telegram shows the score with **Approve / Reject** and a link to the **dashboard**, where you
+   read the resume and cover letter side by side and print them to PDF.
+4. **Approve** marks the job approved. Nothing is submitted anywhere yet; auto-apply is the next step.
+
 ## Layout
 
 | Folder | What it is | Status |
 |---|---|---|
-| `watcher/` | 60-second poller for Greenhouse, Lever, Ashby + Telegram alerts | **Built** |
-| `profile/` | Your master resume, standard answers and stories | Waiting on your resume |
-| `profile_mcp/` | MCP server for searching your experience and rendering resumes | Step 1 next |
-| `web/` | Approval queue + dashboard | Step 3 |
-| `bot/` | Telegram Approve / Skip buttons | Step 3 |
-| `apply/` | Greenhouse / Lever / Ashby form adapters, stop before Submit | Step 4 |
-| `outreach/` | Contact finding + message drafts (you send) | Step 5 |
-| `mail/` | Gmail reply tracking + classifier | Step 6 |
+| `watcher/` | 60-second poller for Greenhouse, Lever, Ashby + Telegram alerts | Built |
+| `profile/` | Master resume (`resume.yaml`), standard answers | **Placeholder: replace with yours** |
+| `profile_mcp/` | Profile loading/search + MCP server for Claude Code / Desktop | Built |
+| `tailor/` | Claude tailoring, guardrails, resume + cover letter rendering | Built |
+| `bot/` | Telegram button handler | Built |
+| `web/` | Approval queue + dashboard (FastAPI) | Built |
+| `apply/` | Greenhouse / Lever / Ashby form adapters, stop before Submit | Next |
+| `outreach/` | Contact finding + message drafts (you send) | Later |
+| `mail/` | Gmail reply tracking + classifier | Later |
 | `data/` | SQLite database (git-ignored) | |
 
-Secrets go in `.env` (copy `.env.example`); never commit it. On a VPS: `docker compose up -d`.
+Secrets go in `.env` (copy `.env.example`); never commit it.
+
+## Run everything
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env            # fill in Telegram + ANTHROPIC_API_KEY
+set -a; source .env; set +a
+
+python -m watcher.main --db data/jobs.db                          # terminal 1
+python -m bot.main --db data/jobs.db                              # terminal 2
+DB_PATH=data/jobs.db uvicorn --factory web.app:main_app --port 8000   # terminal 3, open localhost:8000
+```
+
+On a VPS: `docker compose up -d` runs all three.
+
+**Use your profile from Claude Code:** `claude mcp add profile -- python -m profile_mcp.server`
+gives Claude `search_experience`, `get_profile` and `render_resume`.
+
+**Cost:** tailoring uses `claude-opus-5-5` by default (about $0.14 a job, profile cached).
+Change `[tailor] model` in `config.toml` to `claude-sonnet-5-5` to roughly halve it.
+The watcher, bot and dashboard make no Claude calls.
 
 ## The watcher
 
@@ -35,12 +69,7 @@ Telegram message for new jobs whose title and location match your filters.
 ## Run it
 
 ```bash
-python3 -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env                      # then fill in the Telegram values
-set -a; source .env; set +a
-python -m watcher.main --once --dry-run   # one pass, prints matches
-python -m watcher.main                    # every 60s, sends to Telegram
+python -m watcher.main --once --dry-run   # one pass, prints matches instead of sending
 ```
 
 ## Telegram setup (about 2 minutes)
@@ -65,10 +94,10 @@ well-known tech companies; replace it with your targets.
 python -m unittest -v
 ```
 
-Offline tests cover parsing for all three ATSs, the filters, first-poll seeding, dedupe,
-failed-send retry and closed jobs.
+Offline tests (fake job boards, fake Claude and fake Telegram) cover parsing, filters, dedupe,
+tailoring guardrails, rendering, the bot buttons and the dashboard flow.
 
 ## Next steps (from architecture/job-automation-architecture.md)
 
-Profile + resume tailoring, LLM fit scoring, Approve/Skip buttons in Telegram, the
-approval dashboard, then the per-ATS apply adapters.
+Per-ATS apply adapters that fill the form and stop before Submit, then outreach drafts and
+Gmail tracking.

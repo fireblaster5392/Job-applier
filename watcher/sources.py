@@ -2,6 +2,8 @@
 
 All three are official, unauthenticated, read-only endpoints meant for career pages.
 """
+import html
+import re
 from datetime import datetime, timezone
 
 import httpx
@@ -100,3 +102,39 @@ async def fetch_board(client: httpx.AsyncClient, ats: str, slug: str) -> list[Jo
         raise BoardNotFound(f"{ats}/{slug}")
     resp.raise_for_status()
     return PARSERS[ats](slug, resp.json())
+
+
+def _strip_html(text: str) -> str:
+    text = html.unescape(text or "")
+    text = re.sub(r"<\s*(br|/p|/li|/h\d)\s*/?>", "\n", text, flags=re.I)
+    text = re.sub(r"<li[^>]*>", "- ", text, flags=re.I)
+    text = re.sub(r"<[^>]+>", "", text)
+    text = html.unescape(text)
+    return re.sub(r"\n\s*\n+", "\n\n", text).strip()
+
+
+def job_description(job: Job, client: httpx.Client | None = None) -> str:
+    """Full plain-text job description. Lever and Ashby include it in the listing;
+    Greenhouse needs one extra request for the job's detail."""
+    raw = job.raw or {}
+    if job.ats == "lever":
+        parts = [raw.get("descriptionPlain") or _strip_html(raw.get("description", ""))]
+        for section in raw.get("lists") or []:
+            parts.append(f"{section.get('text', '')}\n{_strip_html(section.get('content', ''))}")
+        parts.append(raw.get("additionalPlain") or _strip_html(raw.get("additional", "")))
+        return "\n\n".join(p for p in parts if p).strip()
+    if job.ats == "ashby":
+        return raw.get("descriptionPlain") or _strip_html(raw.get("descriptionHtml", ""))
+    if job.ats == "greenhouse":
+        if raw.get("content"):
+            return _strip_html(raw["content"])
+        own = client is None
+        client = client or httpx.Client(timeout=20)
+        try:
+            resp = client.get(f"https://boards-api.greenhouse.io/v1/boards/{job.company}/jobs/{job.job_id}")
+            resp.raise_for_status()
+            return _strip_html(resp.json().get("content", ""))
+        finally:
+            if own:
+                client.close()
+    return ""
