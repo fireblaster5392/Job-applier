@@ -132,7 +132,27 @@ class JobStore:
         self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
+        self._add_missing_columns()
         self.conn.executescript(SCHEMA)
+
+    def _add_missing_columns(self) -> None:
+        """Bring a database made by an earlier version up to SCHEMA: new tables come from
+        CREATE TABLE IF NOT EXISTS, new columns on existing tables are added here."""
+        ref = sqlite3.connect(":memory:")
+        ref.executescript(SCHEMA)
+        tables = [r[0] for r in ref.execute("SELECT name FROM sqlite_master WHERE type='table'")]
+        for table in tables:
+            have = {r[1] for r in self.conn.execute(f"PRAGMA table_info({table})")}
+            if not have:
+                continue
+            for _, name, type_, notnull, default, _ in ref.execute(f"PRAGMA table_info({table})"):
+                if name in have:
+                    continue
+                col = f"{name} {type_}"
+                if default is not None:
+                    col += f" {'NOT NULL ' if notnull else ''}DEFAULT {default}"
+                self.conn.execute(f"ALTER TABLE {table} ADD COLUMN {col}")
+        ref.close()
 
     def is_seeded(self, ats: str, company: str) -> bool:
         row = self.conn.execute(

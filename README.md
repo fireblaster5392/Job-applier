@@ -87,7 +87,20 @@ On a VPS: `docker compose up -d` runs all six.
 The apply queue needs Chromium: `pip install playwright && playwright install chromium` locally
 (the Docker image has it).
 
-**Use your profile from Claude Code:** `claude mcp add profile -- python -m profile_mcp.server`
+**Job-search MCP server** (`profile_mcp/server.py`). Tools: `search_experience`, `get_profile`,
+`render_resume`, `list_jobs`, `get_job`. It reads the same `profile/` files and `data/jobs.db` the
+pipeline uses, so you can ask Claude things like "which tailored jobs are waiting on me?" or "draft a
+resume for this posting from my real bullets". The pipeline itself imports the profile code directly;
+it doesn't need the server running.
+
+- *Local, on your laptop (stdio):* `claude mcp add job-search -- python -m profile_mcp.server`
+  (run from the repo root). For Claude Desktop, add to `claude_desktop_config.json`:
+  `{"mcpServers": {"job-search": {"command": "python", "args": ["-m", "profile_mcp.server"], "cwd": "/path/to/job-applier"}}}`
+- *On the VPS (HTTP):* the `mcp` service in `docker-compose.yml` serves `http://127.0.0.1:8765/mcp`
+  on the VPS only. Put it on your tailnet with `tailscale serve --bg --https=8765 http://127.0.0.1:8765`,
+  set `MCP_ALLOWED_HOSTS=<vps>.<tailnet>.ts.net,127.0.0.1,localhost` in `.env` before `docker compose up -d mcp`,
+  then from any of your devices: `claude mcp add --transport http job-search https://<vps>.<tailnet>.ts.net:8765/mcp`.
+  Requests with any other Host header are refused. Never expose port 8765 publicly: the server has no login.
 gives Claude `search_experience`, `get_profile` and `render_resume`.
 
 **Cost:** scoring every match with Haiku is about $0.0005 a job; tailoring a good fit with

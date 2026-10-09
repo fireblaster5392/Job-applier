@@ -43,7 +43,7 @@ leaves their hands.
 | # | Step | Status |
 |---|---|---|
 | 1 | **Job watcher**: Greenhouse, Lever, Ashby APIs every 60 s, dedupe in SQLite | ✅ Built |
-| 2 | **Profile**: master resume with tagged bullet ids, standard answers, Profile MCP server | ✅ Built (placeholder data) |
+| 2 | **Profile**: master resume with tagged bullet ids, standard answers, job-search MCP server (stdio locally, HTTP `mcp` service on the VPS) | ✅ Built (placeholder data) |
 | 3 | **Fit scoring**: Haiku scores every match 0-100 | ✅ Built |
 | 4 | **Tailor first, approve once**: score ≥ threshold → tailored resume + cover letter → one Telegram message with Approve / Edit / Skip; lower scores listed on the dashboard | ✅ Built |
 | 5 | **Dashboard**: pipeline, tailored docs, editor, approval buttons | ✅ Built |

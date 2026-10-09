@@ -60,6 +60,19 @@ services:
       - ./data:/app/data
       - ./config.toml:/app/config.toml:ro
 
+  mcp:        # job-search MCP server for Claude Code / Desktop: profile, resume rendering, your pipeline
+    build: .
+    restart: unless-stopped
+    command: python -m profile_mcp.server --http --host 0.0.0.0 --port 8765
+    environment:                     # no .env: this server needs no secrets
+      DB_PATH: /app/data/jobs.db
+      RESUME_OUTPUT_DIR: /app/data/output
+      MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-localhost,127.0.0.1}
+    volumes:
+      - ./data:/app/data
+      - ./profile:/app/profile:ro
+    ports: ["127.0.0.1:8765:8765"]   # publish on your tailnet with `tailscale serve`, see README
+
   # postgres:   # switch DATABASE_URL to Postgres once several services write
   #   image: postgres:17
   #   restart: unless-stopped
