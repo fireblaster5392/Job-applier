@@ -3,7 +3,7 @@
 Everything that needs the candidate's profile, a fit score, or a tailored resume and cover letter
 goes through a TailorProvider:
 
-- ClaudeProvider (default): profile from profile/resume.yaml, scoring and tailoring with Claude.
+- ClaudeProvider (default): profile from the seed files in profile/, scoring and tailoring with Claude.
 - McpProvider: your own MCP server supplies all three. Tool names and schemas are in
   docs/tailoring-server.md.
 
@@ -41,7 +41,7 @@ TOOL_TAILOR = "tailor_application"
 
 class TailorProvider(Protocol):
     def profile(self) -> Profile:
-        """The candidate's master profile, in the resume.yaml shape, with local answers.yaml."""
+        """The candidate's master profile, as get_resume_profile returns it, with local answers.yaml."""
 
     def score(self, job: dict, description: str) -> FitScore:
         """Quick 0-100 fit score. job has title, company, location (plus ats, url when known)."""

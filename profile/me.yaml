@@ -1,0 +1,28 @@
+# WHO YOU ARE. Contact details, links, education and summary lines.
+# PLACEHOLDER: replace every value with yours. Used on every resume and cover letter as written.
+
+name: Alex Placeholder
+email: alex@example.com
+phone: "+1 555 0100"
+location: Calgary, AB
+links:                                  # shown in the resume header, in this order
+  - {label: GitHub, url: "https://github.com/example"}
+  - {label: LinkedIn, url: "https://linkedin.com/in/example"}
+  - {label: Portfolio, url: "https://example.dev"}
+
+# One-line headline about you. Tailoring rewrites the resume summary for each job, using only
+# facts from these files; this line tells it how you describe yourself.
+headline: Software engineer focused on backend systems and data pipelines.
+
+# What you want next. Steers scoring and the cover letter; never printed on the resume.
+targets:
+  roles: [Backend Engineer, Software Engineer, Data Engineer]
+  not_interested: [Frontend-only, QA, Sales Engineer]
+  seniority: new grad to 2 years
+
+education:
+  - school: University of Calgary
+    degree: BSc Computer Science
+    start: 2021-09
+    end: 2025-04
+    details: ["GPA 3.7/4.0", "Dean's list 2023, 2024"]   # optional lines, printed as written

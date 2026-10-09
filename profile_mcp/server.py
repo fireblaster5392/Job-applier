@@ -18,12 +18,13 @@ from tailor.render import cover_letter_html, resume_html
 from tailor.guardrails import enforce
 from tailor.schema import TailoredApplication
 
-from .profile import default_profile
+from .profile import check_seed, default_profile
 
 OUTPUT_DIR = Path(os.environ.get("RESUME_OUTPUT_DIR", "output"))
-mcp = MCPServer("profile", instructions=(
-    "The candidate's master resume. Tailored resumes may only select and lightly reword bullets "
-    "returned by search_experience, keeping every fact and number."))
+mcp = MCPServer("job-search", instructions=(
+    "The candidate's profile (roles, project library, skills, resume format rules) and job pipeline. "
+    "Tailored resumes may only select and lightly reword bullets returned by search_experience or "
+    "get_resume_profile, keeping every fact and number, and must follow the profile's format rules."))
 
 
 @mcp.tool()
@@ -63,14 +64,27 @@ def _store():
     return JobStore(os.environ.get("DB_PATH", "data/jobs.db"))
 
 
+@mcp.tool()
+def check_profile() -> dict:
+    """Check the seed files in profile/: errors stop the profile loading, warnings are worth fixing.
+    Also counts roles, projects, bullets and skills."""
+    errors, warnings = check_seed()
+    counts = {}
+    if not errors:
+        p = default_profile()
+        counts = {"roles": len(p.data.get("experience", [])), "projects": len(p.data.get("projects", [])),
+                  "bullets": len(p.bullets), "skills": sum(len(v) for v in p.data.get("skills", {}).values())}
+    return {"ok": not errors, "errors": errors, "warnings": warnings, **counts}
+
+
 # --- The tailoring contract (docs/tailoring-server.md). This server is the reference
 # implementation: same answers as the built-in Claude tailoring. A custom server exposes these
 # three tools with the same inputs and outputs and the pipeline uses it via [tailor] provider = "mcp".
 
 @mcp.tool()
 def get_resume_profile() -> dict:
-    """The full master profile in the resume.yaml shape: basics, experience and projects with
-    bullet ids and tags, education, skills."""
+    """The whole merged profile: basics, targets, education, experience and projects (with bullet
+    ids, tags, tech, keywords, metrics), skill groups, keyword synonyms and format rules."""
     return default_profile().data
 
 

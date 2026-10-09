@@ -1,0 +1,20 @@
+# ONE FILE PER PROJECT. Add as many as you like: tailoring picks the few that fit each job.
+# PLACEHOLDER: replace with yours. Same fields as a role, plus:
+#   priority  1 (show often) to 5 (only when it's a strong match)
+#   summary   one line on what it is; context for tailoring, not printed
+
+id: job-watcher
+name: Job Watcher
+url: "https://github.com/example/job-watcher"
+start: 2025-06
+end: 2025-09
+role: Solo builder
+priority: 1
+summary: Watches company job boards and alerts on new matching roles.
+tech: [Python, asyncio, SQLite, Telegram API]
+keywords: [automation, backend, scraping]
+metrics: ["40 job boards", "60 seconds"]
+bullets:
+  - id: proj-watcher
+    text: Async Python service polling 40 job boards every 60 seconds with SQLite dedupe and Telegram alerts.
+    tags: [asyncio, sqlite]

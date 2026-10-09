@@ -41,7 +41,7 @@ and the step-by-step build order; read it first.
 The dashboard shows, per job: the tailored documents, application status, the company's emails,
 and every outreach message with its replies. The **Networking** page tracks the daily contacts.
 
-Tailoring may only pick and lightly reword bullets from `profile/resume.yaml`. Guardrails drop any
+Tailoring may only pick and lightly reword bullets from your seed files in `profile/` (see [profile/README.md](profile/README.md)). Guardrails drop any
 bullet id that doesn't exist, revert rewrites that add numbers, and drop skills you don't list.
 
 Set `[pipeline] mode = "manual"` in `config.toml` to get every match in Telegram first and tap
@@ -52,7 +52,7 @@ Set `[pipeline] mode = "manual"` in `config.toml` to get every match in Telegram
 | Folder | What it is | Status |
 |---|---|---|
 | `watcher/` | 60-second poller for Greenhouse, Lever, Ashby + Telegram alerts | Built |
-| `profile/` | Master resume (`resume.yaml`), standard answers | **Placeholder: replace with yours** |
+| `profile/` | Seed files: me, experience, projects/, skills, format rules, answers ([what to fill in](profile/README.md)) | **Placeholder: replace with yours** |
 | `profile_mcp/` | Profile loading/search + MCP server for Claude Code / Desktop | Built |
 | `tailor/` | Fit scoring, Claude tailoring, guardrails, resume + cover letter rendering | Built |
 | `worker/` | Auto pipeline: score, tailor good fits, send to Telegram | Built |

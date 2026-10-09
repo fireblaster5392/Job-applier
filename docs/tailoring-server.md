@@ -1,15 +1,18 @@
-# Plugging in your own tailoring server
+# Tailoring server contract
+
+The job-search MCP server in `profile_mcp/server.py` is the tailoring server, seeded from your
+files in `profile/` (what to fill in: [profile/README.md](../profile/README.md)). This page is the
+contract between it and the pipeline. It's useful if you ever want to swap in a different server,
+or call the server from another tool.
 
 The pipeline gets three things from a **tailoring provider**: your profile, a quick fit score for
-each matching job, and a tailored resume + cover letter for the good fits. The built-in provider
-does this with Claude and `profile/resume.yaml`. You can replace it with your own MCP server that
-holds your information, resume rules, keywords and project list.
+each matching job, and a tailored resume + cover letter for the good fits. By default it runs the
+same code as the server in-process. With `provider = "mcp"` it calls a server over MCP instead.
 
 Code: `tailor/provider.py` (`TailorProvider`, `ClaudeProvider`, `McpProvider`).
-Reference server: `profile_mcp/server.py`, which implements the same three tools on top of the
-built-in tailoring. Copy its tool signatures.
+Reference server: `profile_mcp/server.py`.
 
-## Switch to your server
+## Calling a server over MCP instead of in-process
 
 ```toml
 # config.toml
@@ -34,10 +37,10 @@ The non-negotiables in ROADMAP.md hold whichever provider runs:
   isn't in the profile's `skills` is dropped. The dashboard lists each fix.
 - **Legal and EEO answers never come from the server.** They stay in `profile/answers.yaml` on
   the machine running the pipeline.
-- **The resume layout comes from `tailor/render.py`** (HTML, then a PDF for uploads). Your server
-  decides what goes in (which bullets, their order within each role, wording, summary, skills,
-  cover letter). It doesn't decide the template. If your formatting rules need a different layout,
-  that template is the place to change, so the fact checks keep working.
+- **format.yaml limits are enforced** after tailoring (bullet counts, projects, skills,
+  always/never include), using the `format` in the returned profile.
+- **The resume layout comes from `tailor/render.py`**, driven by `format` (section order, dates,
+  skills grouping, font). The server decides what goes in. The template decides how it's laid out.
 
 ## The three tools
 
@@ -46,48 +49,21 @@ JSON text block.
 
 ### `get_resume_profile()`
 
-Returns the whole master profile. The pipeline caches it for 5 minutes. Shape (the same as
-`profile/resume.yaml`):
+Returns the whole merged profile, which is what `profile_mcp.profile.load_seed` builds from the seed
+files. The pipeline caches it for 5 minutes. Keys:
 
-```yaml
-basics:
-  name: Your Name
-  email: you@example.com
-  phone: "+1 555 0100"
-  location: Calgary, AB
-  links: [{label: GitHub, url: "https://github.com/you"}]
-  summary: One or two sentences.
+| Key | From | Shape |
+|---|---|---|
+| `basics` | me.yaml | `name, email, phone, location, links[], summary` (summary = your headline) |
+| `targets` | me.yaml | `roles[], not_interested[], seniority` |
+| `education` | me.yaml | list of `school, degree, start, end, details[]` |
+| `experience` | experience.yaml | list of `company, title, location, start, end, tech[], keywords[], metrics[], bullets[{id, text, tags[]}]` |
+| `projects` | projects/*.yaml | list of `name, role, url, start, end, priority, summary, tech[], keywords[], metrics[], bullets[...]`, newest first |
+| `skills` | skills.yaml `groups` | `{group name: [skills]}` |
+| `keywords` | skills.yaml `keywords` | `{posting term: [what it means in your files]}` |
+| `format` | format.yaml | the settings in profile/README.md |
 
-experience:                       # newest first
-  - company: Example Corp
-    title: Software Engineer
-    location: Calgary, AB
-    start: 2024-05                # YYYY-MM
-    end: present
-    bullets:
-      - id: exco-api              # stable, unique across the whole profile; never reuse
-        text: Built a Python/FastAPI service handling 2M requests a day.
-        tags: [python, fastapi, backend, api]
-
-projects:                         # as many as you like; the tailoring picks the relevant ones
-  - name: Job Watcher
-    url: "https://github.com/you/job-watcher"
-    bullets:
-      - id: proj-watcher
-        text: Async Python service polling 40 job boards every 60 seconds.
-        tags: [python, asyncio, automation]
-
-education:
-  - {school: University of Calgary, degree: BSc Computer Science, end: 2025}
-
-skills:                           # any group names; tailored skills must come from these lists
-  languages: [Python, TypeScript, SQL]
-  frameworks: [FastAPI, React]
-  tools: [Docker, PostgreSQL, AWS]
-```
-
-Required by the pipeline: `basics.name`, and an `id`, `text` and `tags` on every bullet. Bullet
-ids must be unique, or loading the profile fails.
+Required: `basics.name`, and an `id` and `text` on every bullet, with ids unique.
 
 ### `score_fit(job, description)`
 
@@ -122,33 +98,6 @@ Same arguments as `score_fit`. Returns:
 own role or project, in the order you return them; roles and projects keep the order they have in
 the profile. The schema is the
 `TailoredApplication` model in `tailor/schema.py`.
-
-## Suggested extras for your profile data
-
-The pipeline ignores keys it doesn't use, so your server can keep its own rules next to the
-profile and still return the same file from `get_resume_profile`:
-
-```yaml
-keywords:                         # map job-description terms to your tags, for selection
-  "distributed systems": [backend, reliability]
-  "ml ops": [ml, infra]
-
-formatting:                       # rules your tailoring follows when it picks and words bullets
-  max_bullets_total: 10
-  max_bullets_per_role: 4
-  max_projects: 2
-  bullet_style: "action verb, what, measurable result; one line"
-  always_include: [exco-api]
-  never_include_for: {frontend: [exco-oncall]}
-
-projects:
-  - name: ...
-    priority: 1                   # your own ranking hint
-    tags: [...]                   # project-level tags, in addition to bullet tags
-```
-
-Any change that would need the pipeline itself to read one of these keys (for example a page
-limit in the PDF renderer) belongs in `tailor/render.py`.
 
 ## Checking your server
 

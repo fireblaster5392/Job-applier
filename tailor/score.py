@@ -13,7 +13,17 @@ SYSTEM = """You screen job postings for one candidate. Score how well the candid
 location or work authorization) cap the score at 40. Be calibrated: 70+ means worth applying.
 
 Candidate profile:
-{profile}"""
+{profile}
+
+{targets}"""
+
+
+def _targets(profile: Profile) -> str:
+    t = profile.data.get("targets") or {}
+    if not t:
+        return ""
+    return "What the candidate wants (roles they're not interested in score under 40):\n" + "\n".join(
+        f"- {k}: {', '.join(map(str, v)) if isinstance(v, list) else v}" for k, v in t.items())
 
 
 class FitScore(BaseModel):
@@ -28,7 +38,7 @@ def score_job(job: dict, description: str, profile: Profile, *, model: str = DEF
         resp = client.messages.parse(
             model=model,
             max_tokens=1024,
-            system=[{"type": "text", "text": SYSTEM.format(profile=profile.as_prompt_text()),
+            system=[{"type": "text", "text": SYSTEM.format(profile=profile.as_prompt_text(), targets=_targets(profile)),
                      "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content":
                        f"Job: {job['title']} at {job['company']} ({job.get('location') or 'location not listed'})"

@@ -17,7 +17,7 @@ GOOD_OUTPUT = {
         {"id": "made-up", "text": "Led a team of 40 engineers."},                               # unknown id
         {"id": "proj-watcher", "text": "Async Python service polling 40 job boards every 60 seconds."},
     ],
-    "skills": ["Python", "FastAPI", "Kubernetes"],                                               # Kubernetes not in profile
+    "skills": ["Python", "FastAPI", "Rust"],                                                     # Rust not in profile
     "cover_letter": "First paragraph.\n\nSecond paragraph.\n\nThird paragraph.",
 }
 

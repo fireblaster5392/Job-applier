@@ -29,10 +29,35 @@ class GuardrailTests(unittest.TestCase):
     def test_enforce(self):
         app = TailoredApplication.model_validate(GOOD_OUTPUT)
         warnings = enforce(app, PROFILE)
-        self.assertEqual([b.id for b in app.bullets], ["exco-api", "exco-pipeline", "proj-watcher"])
+        # st-react is added so every role keeps min_bullets_per_role
+        self.assertEqual([b.id for b in app.bullets], ["exco-api", "exco-pipeline", "proj-watcher", "st-react"])
         self.assertEqual(app.bullets[1].text, PROFILE.bullets["exco-pipeline"].text)  # reverted
         self.assertEqual(app.skills, ["Python", "FastAPI"])
-        self.assertEqual(len(warnings), 3)
+        self.assertEqual(len(warnings), 4)
+
+    def test_metrics_numbers_allowed_in_rewrites(self):
+        app = TailoredApplication.model_validate({**GOOD_OUTPUT, "bullets": [
+            {"id": "exco-oncall", "text": "Led on-call for 4 services handling 2M requests a day."}]})
+        enforce(app, PROFILE)   # "2M" is in Example Corp's metrics
+        self.assertIn("2M requests", app.bullets[0].text)
+
+    def test_format_limits(self):
+        data = {**PROFILE.data, "format": {"max_bullets_total": 3, "max_bullets_per_role": 1,
+                                           "max_projects": 1, "always_include": ["lab-k8s"],
+                                           "never_include": ["exco-pipeline"], "max_skills": 1}}
+        profile = Profile(data)
+        app = TailoredApplication.model_validate({**GOOD_OUTPUT, "bullets": [
+            {"id": "exco-api", "text": "a"}, {"id": "exco-pipeline", "text": "b"},
+            {"id": "exco-oncall", "text": "c"}, {"id": "rank-model", "text": "d"},
+            {"id": "proj-watcher", "text": "e"}]})
+        enforce(app, profile)
+        ids = [b.id for b in app.bullets]
+        self.assertNotIn("exco-pipeline", ids)          # never_include
+        self.assertIn("lab-k8s", ids)                   # always_include, even past max_projects
+        self.assertNotIn("exco-oncall", ids)            # max_bullets_per_role 1
+        self.assertIn("st-react", ids)                  # every role keeps one bullet
+        self.assertEqual(len(ids), 3)                   # max_bullets_total, projects trimmed first
+        self.assertEqual(app.skills, ["Python"])
 
 
 class ClaudeTests(unittest.TestCase):
@@ -60,7 +85,9 @@ class RenderTests(unittest.TestCase):
         html = resume_html(PROFILE, app)
         self.assertLess(html.index("Example Corp"), html.index("Job Watcher"))
         self.assertNotIn("<script>", html)
-        self.assertNotIn("Startup Inc", html)  # no bullets picked from that role
+        self.assertIn("Startup Inc", html)  # min_bullets_per_role keeps every role
+        self.assertIn("May 2024 – Present", html)
+        self.assertLess(html.index("<h2>Skills"), html.index("<h2>Education"))
         letter = cover_letter_html(PROFILE, app, "acme")
         self.assertEqual(letter.count("<p>"), 7)  # contact, date, greeting, 3 paragraphs, sign-off
 
@@ -87,7 +114,7 @@ class PipelineTests(unittest.TestCase):
         rec = tailor_job(store, rowid, PROFILE, client=fake_claude())
         self.assertEqual(store.get_job(rowid)["status"], "tailored")
         self.assertEqual(rec["data"]["fit_score"], 82)
-        self.assertEqual(len(rec["warnings"]), 3)
+        self.assertEqual(len(rec["warnings"]), 4)
         self.assertIn("Python", rec["description"])
 
     def test_failure_marks_job_failed(self):

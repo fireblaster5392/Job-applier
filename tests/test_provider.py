@@ -4,15 +4,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import yaml
 from mcp.server.mcpserver import MCPServer
 
+from profile_mcp.profile import Profile
 from tailor.pipeline import tailor_job
 from tailor.provider import ClaudeProvider, McpProvider, TailorError, load_provider
 from tests.helpers import store_with_job
 
 ROOT = Path(__file__).resolve().parent.parent
-PROFILE = yaml.safe_load((ROOT / "profile" / "resume.yaml").read_text())
+PROFILE = Profile.load().data
 
 
 def fake_server(calls):
@@ -68,7 +68,7 @@ class McpProviderTests(unittest.TestCase):
             rec = tailor_job(store, rowid, self.provider.profile(), description="We need Python.",
                              provider=self.provider)
             self.assertEqual(store.get_job(rowid)["status"], "tailored")
-        self.assertEqual([b["id"] for b in rec["data"]["bullets"]], ["exco-api"])
+        self.assertEqual([b["id"] for b in rec["data"]["bullets"]], ["exco-api", "st-react"])   # st-react: every role keeps a bullet
         self.assertEqual(rec["data"]["skills"], ["Python"])
         self.assertEqual(rec["model"], "my-model")
         self.assertTrue(any("made-up" in w for w in rec["warnings"]))

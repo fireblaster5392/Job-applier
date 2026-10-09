@@ -1,0 +1,18 @@
+id: ml-ranker
+name: Course Review Ranker
+url: "https://github.com/example/review-ranker"
+start: 2024-01
+end: 2024-04
+role: Team of 3, model and API owner
+priority: 3
+summary: Ranks course reviews by helpfulness for a student site.
+tech: [Python, PyTorch, scikit-learn, FastAPI]
+keywords: [machine learning, nlp, ranking]
+metrics: ["12,000 reviews", "0.81 NDCG"]
+bullets:
+  - id: rank-model
+    text: Trained a review-helpfulness ranker on 12,000 labelled reviews, reaching 0.81 NDCG.
+    tags: [nlp, ranking]
+  - id: rank-api
+    text: Served the model behind a FastAPI endpoint used by the site's search page.
+    tags: [api, deployment]

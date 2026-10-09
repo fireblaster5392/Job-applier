@@ -30,7 +30,7 @@ leaves their hands.
 - **Never log into or automate the user's LinkedIn.** Find people through search APIs; the user
   sends LinkedIn messages themselves.
 - **No invented resume content.** Tailoring only selects and lightly rewords bullets from
-  `profile/resume.yaml`; guardrails drop unknown bullets, new numbers and unlisted skills.
+  the seed files in `profile/`; guardrails drop unknown bullets, new numbers and unlisted skills.
   Legal answers (work authorization, sponsorship, EEO) come verbatim from `profile/answers.yaml`.
 - **Human pacing, no evasion.** Applications are spaced out with daily caps. No CAPTCHA solvers,
   no fingerprint spoofing, no bypassing a site's protections: CAPTCHAs go to the user.
@@ -43,7 +43,7 @@ leaves their hands.
 | # | Step | Status |
 |---|---|---|
 | 1 | **Job watcher**: Greenhouse, Lever, Ashby APIs every 60 s, dedupe in SQLite | ✅ Built |
-| 2 | **Profile**: master resume with tagged bullet ids, standard answers, job-search MCP server (stdio locally, HTTP `mcp` service on the VPS) | ✅ Built (placeholder data) |
+| 2 | **Profile**: seed files (me, experience, project library, skills + keywords, format rules, answers) with a checker; job-search MCP server (stdio locally, HTTP `mcp` service on the VPS) that tailors from them | ✅ Built (placeholder data; user fills the seed) |
 | 3 | **Fit scoring**: Haiku scores every match 0-100 | ✅ Built |
 | 3b | **Tailoring interface**: profile, scoring and tailoring behind one provider; built-in Claude by default, or the user's own MCP tailoring server (`docs/tailoring-server.md`) | ✅ Built (interface); user's server in progress |
 | 4 | **Tailor first, approve once**: score ≥ threshold → tailored resume + cover letter → one Telegram message with Approve / Edit / Skip; lower scores listed on the dashboard | ✅ Built |
@@ -67,15 +67,16 @@ leaves their hands.
 - **No CAPTCHA bots.** CAPTCHAs are handed to the user; pacing keeps volume human.
 - **Outreach after applying**: hiring manager first, then engineers, then recruiters.
 - **Networking runs separately** from job applications, every morning.
-- **The user builds their own tailoring MCP server** (their info, resume rules, keywords, project
-  list). The pipeline calls it through `tailor/provider.py`; guardrails and `answers.yaml` stay on
-  the pipeline side.
+- **Claude builds the profile/tailoring MCP server; the user supplies the seed data** (their info,
+  resume rules, keywords, project library) in `profile/`. A different server can still plug in via
+  `tailor/provider.py`; guardrails and `answers.yaml` stay on the pipeline side.
 - **Models**: Haiku for scoring and email classification, Opus for tailoring and drafting
   (switchable to Sonnet in `config.toml` to cut cost).
 
 ## User to-do before a real run
 
-- Upload the real resume (Claude converts it into `profile/resume.yaml`) and fill `profile/answers.yaml`.
+- Fill the seed files in `profile/` (me, experience, projects/, skills, format; see `profile/README.md`;
+  or upload the real resume and Claude converts it), run `python -m profile_mcp.check`, and fill `profile/answers.yaml`.
 - Create a Telegram bot token, an Anthropic API key, and optionally Brave / Apollo keys and a
   Gmail app password; put them in `.env`.
 - Install the Claude GitHub App on the repository so the code can be pushed.

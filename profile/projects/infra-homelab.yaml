@@ -1,0 +1,16 @@
+id: homelab
+name: Self-hosted Homelab
+start: 2023-01
+end: present
+role: Personal
+priority: 4
+summary: Runs personal services on a small Kubernetes cluster.
+tech: [Kubernetes, Docker, Terraform, Grafana]
+keywords: [devops, infrastructure, monitoring]
+bullets:
+  - id: lab-k8s
+    text: Run 10 self-hosted services on a 3-node k3s cluster managed with Terraform and GitOps.
+    tags: [gitops]
+  - id: lab-monitoring
+    text: Set up Prometheus and Grafana alerting for the cluster, with on-call alerts to my phone.
+    tags: [observability]

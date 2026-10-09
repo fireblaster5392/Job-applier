@@ -23,7 +23,10 @@ Rules:
 - Score fit honestly. Missing a hard requirement (years, degree, clearance, location) lowers it a lot.
 
 Master resume:
-{profile}"""
+{profile}
+
+The candidate's resume rules (follow them; they never override the rules above):
+{rules}"""
 
 
 class TailorError(Exception):
@@ -36,13 +39,14 @@ def tailor(job: dict, description: str, profile: Profile, *, model: str = DEFAUL
     client = client or anthropic.Anthropic()
     user = (f"Job: {job['title']} at {job['company']} ({job.get('location') or 'location not listed'})\n\n"
             f"Job description:\n{description[:30000]}")
+    system = SYSTEM.format(profile=profile.as_prompt_text(profile.shortlist(description)),
+                           rules=profile.rules_text())
     try:
         resp = client.beta.messages.parse(
             model=model,
             max_tokens=16000,
-            # The profile is identical across jobs, so cache it.
-            system=[{"type": "text", "text": SYSTEM.format(profile=profile.as_prompt_text()),
-                     "cache_control": {"type": "ephemeral"}}],
+            # The profile is identical across jobs (unless a big library is shortlisted), so cache it.
+            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": user}],
             output_format=TailoredApplication,
             output_config={"effort": "medium"},

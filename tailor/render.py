@@ -1,8 +1,9 @@
-"""Render a tailored resume and cover letter as printable HTML (one page, single column, ATS-friendly).
+"""Render a tailored resume and cover letter as printable HTML (single column, ATS-friendly).
+Section order, dates, skills layout and font come from profile/format.yaml.
 
 Print to PDF from the browser, or swap in RenderCV later for typeset PDFs.
 """
-from datetime import date
+from datetime import date, datetime
 
 from jinja2 import Environment
 
@@ -16,7 +17,7 @@ RESUME = env.from_string("""<!doctype html>
 <html><head><meta charset="utf-8"><title>{{ b.name }} resume</title>
 <style>
   @page { size: letter; margin: 0.5in; }
-  body { font: 10.5pt/1.35 Helvetica, Arial, sans-serif; color: #111; max-width: 7.5in; margin: 0 auto; }
+  body { font: {{ f.font_size }}pt/1.35 {{ f.font }}; color: #111; max-width: 7.5in; margin: 0 auto; }
   h1 { font-size: 18pt; margin: 0; }
   .contact { margin: 2px 0 8px; }
   h2 { font-size: 11pt; text-transform: uppercase; border-bottom: 1px solid #333; margin: 12px 0 4px; }
@@ -24,23 +25,27 @@ RESUME = env.from_string("""<!doctype html>
   .sub { display: flex; justify-content: space-between; font-style: italic; }
   ul { margin: 2px 0 0 18px; padding: 0; }
   li { margin: 1px 0; }
+  p { margin: 2px 0; }
 </style></head><body>
 <h1>{{ b.name }}</h1>
 <div class="contact">{{ [b.email, b.phone, b.location] | select | join(" · ") }}
 {% for l in b.links or [] %} · <a href="{{ l.url }}">{{ l.label }}</a>{% endfor %}</div>
-{% if app.summary %}<h2>Summary</h2><p>{{ app.summary }}</p>{% endif %}
-{% for section, entries in sections %}
-{% if entries %}<h2>{{ section }}</h2>{% endif %}
-{% for e in entries %}
+{% for name in f.sections %}
+{% if name == "summary" and app.summary %}<h2>Summary</h2><p>{{ app.summary }}</p>
+{% elif name in entries and entries[name] %}<h2>{{ name | title }}</h2>
+{% for e in entries[name] %}
 <div class="role"><span>{{ e.heading }}</span><span>{{ e.dates }}</span></div>
 {% if e.sub %}<div class="sub"><span>{{ e.sub }}</span><span>{{ e.location }}</span></div>{% endif %}
 <ul>{% for text in e.bullets %}<li>{{ text }}</li>{% endfor %}</ul>
 {% endfor %}
+{% elif name == "skills" and skills %}<h2>Skills</h2>
+{% for group, items in skills %}<p>{% if group %}<b>{{ group }}:</b> {% endif %}{{ items | join(", ") }}</p>{% endfor %}
+{% elif name == "education" and education %}<h2>Education</h2>
+{% for ed in education %}<div class="role"><span>{{ ed.degree }}, {{ ed.school }}</span><span>{{ ed.dates }}</span></div>
+{% if ed.details %}<ul>{% for d in ed.details %}<li>{{ d }}</li>{% endfor %}</ul>{% endif %}
 {% endfor %}
-{% if app.skills %}<h2>Skills</h2><p>{{ app.skills | join(", ") }}</p>{% endif %}
-{% if education %}<h2>Education</h2>
-{% for ed in education %}<div class="role"><span>{{ ed.degree }}, {{ ed.school }}</span><span>{{ ed.end }}</span></div>{% endfor %}
 {% endif %}
+{% endfor %}
 </body></html>""")
 
 LETTER = env.from_string("""<!doctype html>
@@ -57,28 +62,59 @@ LETTER = env.from_string("""<!doctype html>
 </body></html>""")
 
 
-def _sections(profile: Profile, app: TailoredApplication):
+def _date(value, fmt: str) -> str:
+    text = str(value or "")
+    if text.lower() == "present":
+        return "Present"
+    for pattern in ("%Y-%m", "%Y-%m-%d", "%Y"):
+        try:
+            return datetime.strptime(text, pattern).strftime(fmt if pattern != "%Y" else "%Y")
+        except ValueError:
+            continue
+    return text
+
+
+def _dates(entry: dict, fmt: str) -> str:
+    return " – ".join(_date(entry[k], fmt) for k in ("start", "end") if entry.get(k))
+
+
+def _entries(profile: Profile, app: TailoredApplication) -> dict:
     chosen = {b.id: (i, b.text) for i, b in enumerate(app.bullets)}
-    out = []
-    for section, title in (("experience", "Experience"), ("projects", "Projects")):
+    fmt = profile.format["date_format"]
+    out = {}
+    for section in ("experience", "projects"):
         entries = []
-        for e in profile.data.get(section, []):   # keep the resume's chronological order
+        for e in profile.data.get(section, []):   # keep the profile's order (newest first)
             picks = sorted((chosen[b["id"]] for b in e.get("bullets", []) if b["id"] in chosen))
             if not picks:
                 continue
             if section == "experience":
                 entries.append({"heading": e["title"], "sub": e["company"], "location": e.get("location", ""),
-                                "dates": f"{e.get('start', '')} – {e.get('end', '')}", "bullets": [t for _, t in picks]})
+                                "dates": _dates(e, fmt), "bullets": [t for _, t in picks]})
             else:
-                entries.append({"heading": e["name"], "sub": "", "location": "", "dates": "",
-                                "bullets": [t for _, t in picks]})
-        out.append((title, entries))
+                entries.append({"heading": e["name"], "sub": e.get("role", ""), "location": "",
+                                "dates": _dates(e, fmt), "bullets": [t for _, t in picks]})
+        out[section] = entries
     return out
 
 
+def _skills(profile: Profile, app: TailoredApplication) -> list[tuple[str, list[str]]]:
+    if not app.skills:
+        return []
+    if not profile.format["group_skills"]:
+        return [("", app.skills)]
+    picked = {s.lower() for s in app.skills}
+    groups = [(g, [s for s in items if str(s).lower() in picked])
+              for g, items in profile.data.get("skills", {}).items()]
+    return [(g, items) for g, items in groups if items]
+
+
 def resume_html(profile: Profile, app: TailoredApplication) -> str:
-    return RESUME.render(b=profile.basics, app=app, sections=_sections(profile, app),
-                         education=profile.data.get("education", []))
+    fmt = profile.format["date_format"]
+    education = [{**ed, "dates": _dates(ed, fmt) if ed.get("start") else _date(ed.get("end"), fmt)}
+                 for ed in profile.data.get("education", [])]
+    return RESUME.render(b=profile.basics, app=app, f=profile.format, entries=_entries(profile, app),
+                         skills=_skills(profile, app), education=education)
 
 
 def cover_letter_html(profile: Profile, app: TailoredApplication, company: str) -> str:

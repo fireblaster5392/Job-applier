@@ -107,7 +107,8 @@ class WebTests(unittest.TestCase):
         self.assertIn("bullet_exco-api", page)
         self.client.post(f"/jobs/{self.rowid}/edit", data={
             "summary": "My own summary.", "skills": "Python, Go", "cover_letter": "Para one.\r\n\r\nPara two.",
-            "bullet_exco-api": "Built a billing API (my wording).", "bullet_exco-pipeline": "", "bullet_proj-watcher": "Kept."})
+            "bullet_exco-api": "Built a billing API (my wording).", "bullet_exco-pipeline": "", "bullet_proj-watcher": "Kept.",
+            "bullet_st-react": ""})
         rec = JobStore(self.db).get_tailored(self.rowid)
         self.assertEqual(rec["data"]["summary"], "My own summary.")
         self.assertEqual([b["id"] for b in rec["data"]["bullets"]], ["exco-api", "proj-watcher"])
