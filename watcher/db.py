@@ -33,8 +33,9 @@ CREATE TABLE IF NOT EXISTS jobs (
     is_new       INTEGER NOT NULL DEFAULT 0,  -- 0 = backlog from the board's first poll
     notified_at  TEXT,
     status       TEXT NOT NULL DEFAULT 'discovered',
-                                    -- discovered | below_threshold | tailoring | tailored
-                                    -- | approved | rejected | skipped | failed
+                                    -- discovered | below_threshold | tailoring | tailored | approved
+                                    -- | applying | needs_review | submit_requested | needs_you | submitted
+                                    -- | apply_failed | rejected | skipped | failed
     score        INTEGER,           -- quick fit score 0-100 (auto mode)
     score_reasons TEXT,             -- JSON list
     outreach_at  TEXT,              -- when contacts were found and drafts sent to you
@@ -98,6 +99,17 @@ CREATE TABLE IF NOT EXISTS inbox (
                                     -- | assessment | offer | other
     received_at  TEXT,
     created_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS applications (
+    job_rowid    INTEGER PRIMARY KEY,
+    outcome      TEXT,              -- submitted | needs_review | needs_you | failed
+    answers      TEXT,              -- JSON [{label, type, answer, source}] as filled
+    reasons      TEXT,              -- JSON list: why it came back to you
+    screenshot   TEXT,              -- path to the latest screenshot
+    attempts     INTEGER NOT NULL DEFAULT 0,
+    last_attempt_at TEXT,
+    submitted_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS state (

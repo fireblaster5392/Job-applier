@@ -25,7 +25,8 @@ BASE = """<!doctype html>
   th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align: top; }
   th { font-size: 12px; text-transform: uppercase; color: var(--muted); }
   .status { font-size: 12px; padding: 2px 8px; border-radius: 999px; border:1px solid var(--line); white-space: nowrap; }
-  .s-approved { color: var(--ok); } .s-rejected, .s-failed { color: var(--bad); } .s-tailoring { color: var(--warn); } .s-below_threshold { color: var(--muted); }
+  .s-approved { color: var(--ok); } .s-rejected, .s-failed { color: var(--bad); } .s-tailoring { color: var(--warn); } .s-below_threshold { color: var(--muted); } .s-submitted { color: var(--ok); }
+  .s-needs_review, .s-needs_you { color: var(--warn); } .s-apply_failed { color: var(--bad); }
   .a-interview, .a-offer, .a-assessment, .replied { color: var(--ok); } .a-rejected { color: var(--bad); }
   .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:16px; }
   .actions { display:flex; gap:8px; flex-wrap:wrap; }
@@ -96,8 +97,24 @@ JOB = """{% extends "base" %}
     <form method="post" action="/jobs/{{ job.rowid }}/status"><input type="hidden" name="status" value="skipped"><button>Skip</button></form>
   </div>
   {% if job.app_status %}<p>Application: <span class="status a-{{ job.app_status }}">{{ job.app_status }}</span></p>{% endif %}
-  {% if job.status == "approved" %}<p class="muted">Approved. Auto-apply isn't built yet: apply at <a href="{{ job.apply_url or job.url }}" target="_blank">the posting</a> with the files below.</p>{% endif %}
+  {% if job.status == "approved" %}<p class="muted">Approved: it's in the apply queue.</p>{% endif %}
 </div>
+{% if application %}
+<div class="card" id="application"><h3 style="margin-top:0">Application · <span class="status s-{{ job.status }}">{{ application.outcome }}</span></h3>
+  {% if application.reasons %}<ul>{% for r in application.reasons %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
+  <div class="actions">
+    {% if job.status == "needs_review" %}<form method="post" action="/jobs/{{ job.rowid }}/apply/submit"><button class="primary">Submit with these answers</button></form>{% endif %}
+    {% if job.status in ("apply_failed", "needs_you", "needs_review") %}<form method="post" action="/jobs/{{ job.rowid }}/apply/retry"><button>Retry</button></form>{% endif %}
+    {% if job.status in ("apply_failed", "needs_you", "needs_review") %}<form method="post" action="/jobs/{{ job.rowid }}/apply/done"><button>I submitted it</button></form>
+    <a href="{{ job.apply_url or job.url }}" target="_blank"><button>Open application</button></a>{% endif %}
+  </div>
+  {% if application.answers %}
+  <table style="margin-top:12px"><tr><th>Question</th><th>Answer</th><th>From</th></tr>
+  {% for a in application.answers %}<tr><td>{{ a.label }}</td><td style="white-space:pre-wrap">{{ a.answer }}</td><td class="muted">{{ a.source }}</td></tr>{% endfor %}
+  </table>{% endif %}
+  {% if application.screenshot %}<p><a href="/jobs/{{ job.rowid }}/screenshot" target="_blank">Form screenshot</a></p>{% endif %}
+</div>
+{% endif %}
 {% if job.status == "tailoring" %}<div class="card muted">Claude is tailoring this application. This page refreshes on its own.</div>{% endif %}
 {% if t %}
 <div class="card">

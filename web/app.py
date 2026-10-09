@@ -8,8 +8,10 @@ import os
 import threading
 
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 
+from apply.runner import get_application
+from apply.status import mark_submitted_by_user
 from outreach.mailer import SmtpMailer
 from outreach.store import (get_message, mark_linkedin_sent, mark_replied, network_contacts, outreach_for_job,
                             send_email_message, skip_message)
@@ -23,7 +25,8 @@ from watcher.main import load_config
 
 from .templates import env
 
-STATUSES = ["tailored", "below_threshold", "discovered", "tailoring", "approved", "rejected", "skipped", "failed"]
+STATUSES = ["tailored", "needs_review", "needs_you", "approved", "submitted", "below_threshold", "discovered",
+            "apply_failed", "rejected", "skipped", "failed"]
 SETTABLE = {"approved", "rejected", "skipped", "discovered"}
 
 
@@ -64,7 +67,31 @@ def create_app(db_path: str, profile_loader=Profile.load, tailor=tailor_job,
             outreach = outreach_for_job(store, rowid)
             app_emails = store.conn.execute(
                 "SELECT * FROM inbox WHERE job_rowid=? AND kind='application' ORDER BY received_at", (rowid,)).fetchall()
-        return env.get_template("job").render(job=job, t=t, outreach=outreach, app_emails=app_emails)
+            application = get_application(store, rowid)
+        return env.get_template("job").render(job=job, t=t, outreach=outreach, app_emails=app_emails,
+                                              application=application)
+
+    @app.get("/jobs/{rowid}/screenshot")
+    def screenshot(rowid: int):
+        with lock:
+            a = get_application(store, rowid)
+        if not a or not a["screenshot"] or not os.path.exists(a["screenshot"]):
+            raise HTTPException(404, "No screenshot")
+        return FileResponse(a["screenshot"], media_type="image/png")
+
+    @app.post("/jobs/{rowid}/apply/{action}")
+    def apply_action(rowid: int, action: str):
+        job = job_or_404(rowid)
+        with lock:
+            if action == "submit" and job["status"] == "needs_review":
+                store.set_status(rowid, "submit_requested")
+            elif action == "retry" and job["status"] in ("apply_failed", "needs_you", "needs_review"):
+                store.set_status(rowid, "approved")
+            elif action == "done":
+                mark_submitted_by_user(store, rowid)
+            else:
+                raise HTTPException(400, f"can't {action} a job that is {job['status']}")
+        return RedirectResponse(f"/jobs/{rowid}", status_code=303)
 
     @app.get("/network", response_class=HTMLResponse)
     def network():

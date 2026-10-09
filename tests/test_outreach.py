@@ -125,11 +125,11 @@ class DraftAndSendTests(unittest.TestCase):
 
 
 class WorkerOutreachTests(unittest.TestCase):
-    def test_approved_job_gets_contacts_and_drafts_but_sends_nothing(self):
+    def test_submitted_job_gets_contacts_and_drafts_but_sends_nothing(self):
         store, rowid = store_with_job()
         store.set_score(rowid, 85, [])
         store.mark_notified(store.pending_notifications()[0])
-        store.set_status(rowid, "approved")
+        store.set_status(rowid, "submitted")
         sent = []
 
         async def go():

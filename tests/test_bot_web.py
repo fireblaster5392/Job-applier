@@ -55,6 +55,15 @@ class BotTests(unittest.TestCase):
         self.run_bot((f"approve:{self.rowid}", 42))
         self.assertEqual(self.store.get_job(self.rowid)["status"], "approved")
 
+    def test_submit_after_review_and_manual_done(self):
+        self.store.set_status(self.rowid, "needs_review")
+        self.run_bot((f"submit:{self.rowid}", 42))
+        self.assertEqual(self.store.get_job(self.rowid)["status"], "submit_requested")
+        self.store.set_status(self.rowid, "needs_you")
+        self.run_bot((f"done:{self.rowid}", 42))
+        job = self.store.get_job(self.rowid)
+        self.assertEqual((job["status"], job["app_status"]), ("submitted", "applied"))
+
     def test_skip_and_ignores_other_chats(self):
         self.run_bot((f"skip:{self.rowid}", 999))
         self.assertEqual(self.store.get_job(self.rowid)["status"], "discovered")
@@ -106,6 +115,16 @@ class WebTests(unittest.TestCase):
         self.assertIn("You edited this draft.", rec["warnings"])
         self.assertIn("my wording", self.client.get(f"/jobs/{self.rowid}/resume").text)
         self.assertEqual(self.client.get(f"/jobs/{self.rowid}/cover-letter").text.count("Para "), 2)
+
+    def test_apply_actions(self):
+        store = JobStore(self.db)
+        store.set_status(self.rowid, "needs_review")
+        self.client.post(f"/jobs/{self.rowid}/apply/submit")
+        self.assertEqual(JobStore(self.db).get_job(self.rowid)["status"], "submit_requested")
+        self.assertEqual(self.client.post(f"/jobs/{self.rowid}/apply/submit").status_code, 400)
+        self.client.post(f"/jobs/{self.rowid}/apply/done")
+        self.assertEqual(JobStore(self.db).get_job(self.rowid)["status"], "submitted")
+        self.assertIn("Application", self.client.get(f"/jobs/{self.rowid}").text)
 
     def test_rejects_unknown_status(self):
         r = self.client.post(f"/jobs/{self.rowid}/status", data={"status": "submitted"})

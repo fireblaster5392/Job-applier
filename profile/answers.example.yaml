@@ -1,15 +1,24 @@
-# Copy to answers.yaml and fill in. Legal answers are used verbatim, never generated.
-name: ""
-email: ""
-phone: ""
-location: ""
-links:
-  linkedin: ""
-  github: ""
-  portfolio: ""
-work_authorization: ""      # e.g. "Canadian citizen; requires TN for US roles"
-requires_sponsorship: null  # true / false
-notice_period: ""
-salary_expectation: ""
-standard_answers:
-  why_this_company: ""
+# Copy to answers.yaml and fill in. Contact details come from resume.yaml; this file holds
+# application-form answers. Legal answers are used VERBATIM and never generated: if a form asks
+# a legal question this file doesn't answer, the application comes back to you instead.
+
+legal:
+  # Per country, as you'd answer "Are you legally authorized to work in <country>?"
+  authorized_to_work:
+    canada: "Yes"
+    united states: "No"
+  # "Will you now or in the future require sponsorship?"
+  requires_sponsorship:
+    canada: "No"
+    united states: "Yes"
+  # Voluntary EEO questions (gender, race, veteran, disability). "decline" picks the
+  # "decline / prefer not to say" option; or put an exact answer per question type.
+  eeo: decline
+
+# Common non-legal questions. Leave any blank to let it come back to you.
+notice_period: "2 weeks"
+earliest_start: "Immediately"
+salary_expectation: ""          # blank: salary questions come back to you
+willing_to_relocate: "Yes"
+how_did_you_hear: "Company careers page"
+pronouns: ""

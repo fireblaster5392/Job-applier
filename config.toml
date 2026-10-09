@@ -32,13 +32,24 @@ notify_below_threshold = false
 # "claude-sonnet-5-5" roughly halves the cost if the quality holds up for you.
 model = "claude-opus-5-5"
 
+[apply]
+# Approve = submit. The apply queue fills the form, uploads PDFs and submits, one at a time.
+# It comes back to you instead of submitting when: the form has a CAPTCHA, a required question
+# has no saved answer (legal, salary...), or Claude wrote free-text answers you should check.
+max_per_day = 15
+min_gap_minutes = 4          # random gap between applications, between these two
+max_gap_minutes = 12
+active_hours = [8, 22]       # local time
+timezone = "America/Edmonton"
+dry_run = false              # true: fill forms but never click Submit
+
 [outreach]
 # After you approve a job, find people there (Brave Search for LinkedIn profiles, Apollo for
 # emails), draft a LinkedIn note and an email for each, and send them to you on Telegram.
 # Emails go out only when you tap "Send email". LinkedIn notes are for you to paste yourself.
 enabled = true
-# Job statuses that trigger outreach. Add "submitted" once auto-apply exists.
-trigger_statuses = ["approved"]
+# Job statuses that trigger outreach: after the application is in.
+trigger_statuses = ["submitted"]
 max_contacts = 3
 max_emails_per_day = 10
 model = "claude-opus-5-5"

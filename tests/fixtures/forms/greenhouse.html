@@ -1,0 +1,20 @@
+<!doctype html><html><body>
+<h1>Backend Engineer</h1>
+<form id="application_form">
+  <div class="field"><label for="first_name">First Name *</label><input id="first_name" name="first_name" required></div>
+  <div class="field"><label for="last_name">Last Name *</label><input id="last_name" name="last_name" required></div>
+  <div class="field"><label for="email">Email *</label><input id="email" type="email" required></div>
+  <div class="field"><label for="phone">Phone</label><input id="phone" type="tel"></div>
+  <div class="field"><label for="resume">Resume/CV *</label><input id="resume" type="file" required></div>
+  <div class="field"><label for="li">LinkedIn Profile</label><input id="li"></div>
+  <div class="field"><label for="auth">Are you legally authorized to work in the United States? *</label>
+    <select id="auth" required><option value="">Select...</option><option>Yes</option><option>No</option></select></div>
+  <div class="field"><label for="sp">Will you now or in the future require visa sponsorship? *</label>
+    <select id="sp" required><option value="">Select...</option><option>Yes</option><option>No</option></select></div>
+  <div class="field"><label for="why">Why do you want to work at Acme? *</label><textarea id="why" required></textarea></div>
+  <div class="field"><label for="gender">Gender</label>
+    <select id="gender"><option value="">Select...</option><option>Male</option><option>Female</option><option>Decline to self-identify</option></select></div>
+  <button type="submit">Submit Application</button>
+</form>
+<script>document.querySelector("form").addEventListener("submit", e => { e.preventDefault(); if (!e.target.checkValidity()) return; document.body.innerHTML = "<h1>Thank you for applying!</h1>"; });</script>
+</body></html>

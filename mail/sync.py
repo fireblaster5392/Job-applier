@@ -40,7 +40,8 @@ def _match_reply(store: JobStore, mail: dict):
 def _applied_companies(store: JobStore) -> dict[str, int]:
     """normalised company slug -> most recent job rowid you approved there."""
     rows = store.conn.execute(
-        "SELECT rowid, company FROM jobs WHERE status IN ('approved', 'submitted') ORDER BY first_seen").fetchall()
+        "SELECT rowid, company FROM jobs WHERE status IN ('approved', 'applying', 'needs_review', 'submit_requested',"
+        " 'needs_you', 'submitted') ORDER BY first_seen").fetchall()
     return {_norm(r["company"]): r["rowid"] for r in rows}
 
 

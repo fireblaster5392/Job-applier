@@ -55,7 +55,7 @@ class Worker:
         self.profile_loader, self.dashboard_url = profile_loader, dashboard_url
         o = cfg.get("outreach", {})
         self.outreach_on = o.get("enabled", True)
-        self.outreach_statuses = o.get("trigger_statuses", ["approved"])
+        self.outreach_statuses = o.get("trigger_statuses", ["submitted"])
         self.max_contacts = o.get("max_contacts", 3)
         self.outreach_model = o.get("model", DEFAULT_MODEL)
         self.claude, self.http_client = claude, http_client   # injectable for tests

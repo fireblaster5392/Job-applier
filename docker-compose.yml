@@ -19,6 +19,15 @@ services:
       - ./profile:/app/profile:ro
       - ./config.toml:/app/config.toml:ro
 
+  apply:      # submits approved applications at a human pace
+    build: {context: ., dockerfile: Dockerfile.apply}
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./profile:/app/profile:ro
+      - ./config.toml:/app/config.toml:ro
+
   web:        # approval queue + dashboard
     build: .
     restart: unless-stopped

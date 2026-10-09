@@ -111,3 +111,21 @@ class Notifier:
         except httpx.HTTPError as exc:
             log.error("telegram send failed: %s", exc)
             return False
+
+    async def send_file(self, path: str, caption: str = "", photo: bool = False) -> bool:
+        if self.dry_run:
+            print(f"[file] {path} {caption}")
+            return True
+        method, key = ("sendPhoto", "photo") if photo else ("sendDocument", "document")
+        try:
+            with open(path, "rb") as fh:
+                resp = await self.client.post(
+                    API.format(token=self.token, method=method),
+                    data={"chat_id": self.chat_id, "caption": caption[:1000], "parse_mode": "HTML"},
+                    files={key: (os.path.basename(path), fh.read())},
+                )
+            resp.raise_for_status()
+            return True
+        except (httpx.HTTPError, OSError) as exc:
+            log.error("telegram file send failed: %s", exc)
+            return False

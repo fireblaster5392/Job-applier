@@ -1,6 +1,7 @@
 # job-apply
 
-Job application automation, following `architecture/job-automation-architecture.md`.
+Job application automation. **[ROADMAP.md](ROADMAP.md)** has the final goal, the non-negotiables
+and the step-by-step build order; read it first.
 
 ## How it works
 
@@ -13,8 +14,15 @@ Job application automation, following `architecture/job-automation-architecture.
      with its score and reasons, and you can tailor it from there. Nothing is dropped.
    - If scoring or tailoring fails, the job is sent as a plain alert with a **Tailor** button.
 3. **Edit** opens the dashboard, where you can change the summary, bullets, skills and cover letter.
-4. **Approve** marks the job approved. Nothing is submitted anywhere yet; auto-apply is the next step.
-5. **Outreach** starts after you approve: it finds up to 3 people at the company (hiring manager
+4. **Approve** sends the job to the **apply queue**, which opens the form in a headless browser,
+   fills it from your profile, uploads the resume and cover letter as PDFs and submits, one
+   application at a time with a random 4-12 minute gap, a daily cap and active hours. It comes
+   back to you instead of submitting when:
+   - the form has a **CAPTCHA** (never solved automatically): you get the PDFs and a link;
+   - a required question has **no saved answer** (legal, salary, anything not in `answers.yaml`);
+   - **Claude wrote free-text answers**: you see them with a screenshot and tap **Submit**.
+   Tap **I submitted it** when you finish one yourself. `--dry-run` fills forms without submitting.
+5. **Outreach** starts once the application is in: it finds up to 3 people at the company (hiring manager
    first, then engineers, then recruiters) through Brave Search and Apollo, and Claude drafts a
    LinkedIn note and an email for each. Telegram shows each draft:
    - **LinkedIn notes** are in a tap-to-copy block with an "Open profile" button. You send them
@@ -50,7 +58,7 @@ Set `[pipeline] mode = "manual"` in `config.toml` to get every match in Telegram
 | `worker/` | Auto pipeline: score, tailor good fits, send to Telegram | Built |
 | `bot/` | Telegram button handler | Built |
 | `web/` | Approval queue + dashboard (FastAPI) | Built |
-| `apply/` | Greenhouse / Lever / Ashby form adapters, stop before Submit | Next |
+| `apply/` | Apply queue: form filling, PDFs, pacing, hand-offs | Built (needs live testing) |
 | `outreach/` | Contact finding, message drafts, email sending on your tap | Built |
 | `mail/` | Inbox sync: replies + application emails | Built |
 | `networking/` | Daily networking batch + follow-ups | Built |
@@ -70,10 +78,14 @@ python -m watcher.main --db data/jobs.db                          # finds jobs
 python -m worker.main --db data/jobs.db                           # scores + tailors + sends
 python -m bot.main --db data/jobs.db                              # handles Telegram buttons
 python -m mail.main --db data/jobs.db                             # reads replies + application emails
+python -m apply.main --db data/jobs.db --dry-run                  # apply queue (drop --dry-run when ready)
 DB_PATH=data/jobs.db uvicorn --factory web.app:main_app --port 8000   # dashboard at localhost:8000
 ```
 
-On a VPS: `docker compose up -d` runs all five.
+On a VPS: `docker compose up -d` runs all six.
+
+The apply queue needs Chromium: `pip install playwright && playwright install chromium` locally
+(the Docker image has it).
 
 **Use your profile from Claude Code:** `claude mcp add profile -- python -m profile_mcp.server`
 gives Claude `search_experience`, `get_profile` and `render_resume`.
@@ -130,5 +142,4 @@ tailoring guardrails, rendering, the bot buttons and the dashboard flow.
 
 ## Next steps (from architecture/job-automation-architecture.md)
 
-Per-ATS apply adapters that fill the form and stop before Submit, then outreach drafts and
-Gmail tracking.
+See [ROADMAP.md](ROADMAP.md): interview prep sheets, then the weekly review.

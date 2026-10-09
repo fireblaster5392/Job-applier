@@ -13,6 +13,7 @@ import os
 
 import httpx
 
+from apply.status import mark_submitted_by_user
 from outreach.mailer import SmtpMailer
 from outreach.store import mark_linkedin_sent, send_email_message, skip_message
 from profile_mcp.profile import Profile
@@ -87,9 +88,16 @@ class Bot:
             await self.ack(cq, "Rejected")
         elif action == "approve":
             self.store.set_status(rowid, "approved")
-            await self.ack(cq, "Approved")
-            await self.send(f"✅ Approved: <b>{html.escape(label)}</b>\nAuto-apply isn't built yet, so it's "
-                            f"queued as approved. Apply here: {html.escape(job['apply_url'] or job['url'])}")
+            await self.ack(cq, "✅ Approved, applying")
+        elif action == "submit" and job["status"] == "needs_review":
+            self.store.set_status(rowid, "submit_requested")
+            await self.ack(cq, "Submitting")
+        elif action == "retry" and job["status"] in ("apply_failed", "needs_you"):
+            self.store.set_status(rowid, "approved")
+            await self.ack(cq, "Retrying")
+        elif action == "done":
+            mark_submitted_by_user(self.store, rowid)
+            await self.ack(cq, "✅ Marked applied")
         elif action == "tailor":
             if job["status"] == "tailoring":
                 await self.ack(cq, "Already tailoring")
