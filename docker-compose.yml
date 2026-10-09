@@ -9,6 +9,16 @@ services:
       - ./data:/app/data
       - ./config.toml:/app/config.toml:ro
 
+  worker:     # scores new matches, tailors the good fits, sends them to Telegram
+    build: .
+    restart: unless-stopped
+    command: python -m worker.main --db /app/data/jobs.db
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./profile:/app/profile:ro
+      - ./config.toml:/app/config.toml:ro
+
   web:        # approval queue + dashboard
     build: .
     restart: unless-stopped

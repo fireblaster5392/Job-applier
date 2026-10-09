@@ -91,6 +91,22 @@ class WebTests(unittest.TestCase):
         self.assertEqual(JobStore(self.db).get_job(self.rowid)["status"], "approved")
         self.assertIn("approved", self.client.get("/?status=approved").text)
 
+    def test_edit(self):
+        self.assertEqual(self.client.get(f"/jobs/{self.rowid}/edit").status_code, 200)  # redirects to job page
+        self.client.post(f"/jobs/{self.rowid}/tailor")
+        page = self.client.get(f"/jobs/{self.rowid}/edit").text
+        self.assertIn("bullet_exco-api", page)
+        self.client.post(f"/jobs/{self.rowid}/edit", data={
+            "summary": "My own summary.", "skills": "Python, Go", "cover_letter": "Para one.\r\n\r\nPara two.",
+            "bullet_exco-api": "Built a billing API (my wording).", "bullet_exco-pipeline": "", "bullet_proj-watcher": "Kept."})
+        rec = JobStore(self.db).get_tailored(self.rowid)
+        self.assertEqual(rec["data"]["summary"], "My own summary.")
+        self.assertEqual([b["id"] for b in rec["data"]["bullets"]], ["exco-api", "proj-watcher"])
+        self.assertEqual(rec["data"]["skills"], ["Python", "Go"])
+        self.assertIn("You edited this draft.", rec["warnings"])
+        self.assertIn("my wording", self.client.get(f"/jobs/{self.rowid}/resume").text)
+        self.assertEqual(self.client.get(f"/jobs/{self.rowid}/cover-letter").text.count("Para "), 2)
+
     def test_rejects_unknown_status(self):
         r = self.client.post(f"/jobs/{self.rowid}/status", data={"status": "submitted"})
         self.assertEqual(r.status_code, 400)

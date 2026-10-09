@@ -15,6 +15,18 @@ locations = ["united states", "usa", "new york", "san francisco", "seattle", "re
 # Remote jobs match even if their location isn't in the list above.
 allow_remote = true
 
+[pipeline]
+# "auto": every matching job gets a quick fit score; jobs at or above score_threshold are
+#         tailored automatically and sent to Telegram once, ready to approve.
+# "manual": every matching job is sent to Telegram first, and you tap "Tailor resume".
+mode = "auto"
+score_threshold = 70
+# Quick scoring model: runs on every matching job, so it's the cheap one (~$0.0005 a job).
+score_model = "claude-haiku-5-5"
+# Also send jobs below the threshold to Telegram (as plain alerts with a Tailor button).
+# Either way they're listed on the dashboard under "below_threshold".
+notify_below_threshold = false
+
 [tailor]
 # Model for resume + cover letter tailoring (about $0.14 a job on Opus 5.5).
 # "claude-sonnet-5-5" roughly halves the cost if the quality holds up for you.

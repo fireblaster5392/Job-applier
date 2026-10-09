@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 
 
 def tailor_job(store: JobStore, rowid: int, profile: Profile, *, model: str = DEFAULT_MODEL,
-               client=None, http_client=None) -> dict:
+               client=None, http_client=None, description: str | None = None) -> dict:
     """Returns the saved tailoring record. Sets jobs.status to tailored, or failed with last_error."""
     row = store.get_job(rowid)
     if row is None:
@@ -20,7 +20,7 @@ def tailor_job(store: JobStore, rowid: int, profile: Profile, *, model: str = DE
     job = row_to_job(row)
     store.set_status(rowid, "tailoring")
     try:
-        description = job_description(job, http_client)
+        description = description or job_description(job, http_client)
         if not description:
             raise TailorError("Couldn't get the job description.")
         app, usage = tailor({"title": job.title, "company": job.company, "location": job.location},

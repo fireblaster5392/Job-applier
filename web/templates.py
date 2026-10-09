@@ -1,3 +1,5 @@
+import json
+
 from jinja2 import DictLoader, Environment
 
 BASE = """<!doctype html>
@@ -23,7 +25,7 @@ BASE = """<!doctype html>
   th, td { text-align:left; padding:8px 10px; border-bottom:1px solid var(--line); vertical-align: top; }
   th { font-size: 12px; text-transform: uppercase; color: var(--muted); }
   .status { font-size: 12px; padding: 2px 8px; border-radius: 999px; border:1px solid var(--line); white-space: nowrap; }
-  .s-approved { color: var(--ok); } .s-rejected, .s-failed { color: var(--bad); } .s-tailoring { color: var(--warn); }
+  .s-approved { color: var(--ok); } .s-rejected, .s-failed { color: var(--bad); } .s-tailoring { color: var(--warn); } .s-below_threshold { color: var(--muted); }
   .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:16px; }
   .actions { display:flex; gap:8px; flex-wrap:wrap; }
   button { font: inherit; padding: 6px 14px; border-radius: 6px; border:1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
@@ -49,12 +51,13 @@ INDEX = """{% extends "base" %}
 </div>
 {% if jobs %}
 <table>
-<tr><th>Job</th><th class="hide-sm">Location</th><th class="hide-sm">Found</th><th>Status</th></tr>
+<tr><th>Job</th><th class="hide-sm">Location</th><th class="hide-sm">Found</th><th>Score</th><th>Status</th></tr>
 {% for j in jobs %}
 <tr>
   <td><a href="/jobs/{{ j.rowid }}">{{ j.title }}</a><br><span class="muted">{{ j.company }} · {{ j.ats }}</span></td>
   <td class="hide-sm">{{ j.location }}</td>
   <td class="hide-sm muted">{{ j.first_seen[:16].replace("T", " ") }}</td>
+  <td>{{ j.score if j.score is not none and j.score >= 0 else "–" }}</td>
   <td><span class="status s-{{ j.status }}">{{ j.status }}</span></td>
 </tr>
 {% endfor %}
@@ -71,6 +74,10 @@ JOB = """{% extends "base" %}
 <div class="card">
   <h2 style="margin:0">{{ job.title }}</h2>
   <div class="muted">{{ job.company }} · {{ job.location }} · {{ job.ats }}</div>
+  {% if job.score is not none and job.score >= 0 and not t %}
+  <p><b>Quick score {{ job.score }}/100</b>{% if job.status == "below_threshold" %} · below your threshold, so it wasn't tailored automatically{% endif %}</p>
+  {% if job.score_reasons %}<ul class="muted">{% for r in job.score_reasons | fromjson %}<li>{{ r }}</li>{% endfor %}</ul>{% endif %}
+  {% endif %}
   <p><span class="status s-{{ job.status }}">{{ job.status }}</span>
      {% if job.last_error %}<span style="color:var(--bad)">{{ job.last_error }}</span>{% endif %}</p>
   <div class="actions">
@@ -80,6 +87,7 @@ JOB = """{% extends "base" %}
     {% endif %}
     {% if t %}
     <form method="post" action="/jobs/{{ job.rowid }}/status"><input type="hidden" name="status" value="approved"><button class="primary">Approve</button></form>
+    <a href="/jobs/{{ job.rowid }}/edit"><button>Edit</button></a>
     <form method="post" action="/jobs/{{ job.rowid }}/status"><input type="hidden" name="status" value="rejected"><button>Reject</button></form>
     {% endif %}
     <form method="post" action="/jobs/{{ job.rowid }}/status"><input type="hidden" name="status" value="skipped"><button>Skip</button></form>
@@ -103,4 +111,30 @@ JOB = """{% extends "base" %}
 {% if t and t.description %}<div class="card"><h3 style="margin-top:0">Job description</h3><pre>{{ t.description }}</pre></div>{% endif %}
 {% endblock %}"""
 
-env = Environment(loader=DictLoader({"base": BASE, "index": INDEX, "job": JOB}), autoescape=True)
+EDIT = """{% extends "base" %}
+{% block title %}Edit · {{ job.title }}{% endblock %}
+{% block head %}<style>
+  label { display:block; font-weight:600; margin: 12px 0 4px; }
+  textarea, input[type=text] { width:100%; font: inherit; padding: 8px; border-radius: 6px; border:1px solid var(--line); background: var(--bg); color: var(--fg); }
+  .src { font-size: 13px; }
+</style>{% endblock %}
+{% block body %}
+<form method="post" class="card">
+  <h2 style="margin-top:0">Edit: {{ job.title }} · {{ job.company }}</h2>
+  <label for="summary">Summary</label>
+  <textarea id="summary" name="summary" rows="3">{{ t.data.summary }}</textarea>
+  <label>Bullets <span class="muted" style="font-weight:normal">(clear one to remove it)</span></label>
+  {% for b in t.data.bullets %}
+  <textarea name="bullet_{{ b.id }}" rows="2" aria-label="Bullet {{ b.id }}">{{ b.text }}</textarea>
+  <div class="muted src">from [{{ b.id }}]</div>
+  {% endfor %}
+  <label for="skills">Skills, comma separated</label>
+  <input id="skills" type="text" name="skills" value="{{ t.data.skills | join(', ') }}">
+  <label for="cover_letter">Cover letter <span class="muted" style="font-weight:normal">(blank line between paragraphs)</span></label>
+  <textarea id="cover_letter" name="cover_letter" rows="14">{{ t.data.cover_letter }}</textarea>
+  <p class="actions"><button class="primary">Save</button><a href="/jobs/{{ job.rowid }}"><button type="button">Cancel</button></a></p>
+</form>
+{% endblock %}"""
+
+env = Environment(loader=DictLoader({"base": BASE, "index": INDEX, "job": JOB, "edit": EDIT}), autoescape=True)
+env.filters["fromjson"] = json.loads

@@ -33,7 +33,10 @@ CREATE TABLE IF NOT EXISTS jobs (
     is_new       INTEGER NOT NULL DEFAULT 0,  -- 0 = backlog from the board's first poll
     notified_at  TEXT,
     status       TEXT NOT NULL DEFAULT 'discovered',
-                                    -- discovered | tailoring | tailored | approved | rejected | skipped | failed
+                                    -- discovered | below_threshold | tailoring | tailored
+                                    -- | approved | rejected | skipped | failed
+    score        INTEGER,           -- quick fit score 0-100 (auto mode)
+    score_reasons TEXT,             -- JSON list
     last_error   TEXT,
     raw          TEXT,
     PRIMARY KEY (ats, company, job_id)
@@ -131,6 +134,7 @@ class JobStore:
         return new
 
     def mark_notified(self, job: Job) -> None:
+        """Also used by the worker for jobs it handled without a message (below threshold)."""
         self.conn.execute(
             "UPDATE jobs SET notified_at=? WHERE ats=? AND company=? AND job_id=?",
             (now(), *job.key),
@@ -145,7 +149,28 @@ class JobStore:
         ).fetchall()
         return [row_to_job(r) for r in rows]
 
-    # --- used by the bot, the dashboard and tailoring -------------------------------
+    # --- used by the worker, the bot, the dashboard and tailoring -------------------
+
+    def jobs_to_score(self, limit: int = 20) -> list[Job]:
+        """New matching jobs the worker hasn't handled yet."""
+        rows = self.conn.execute(
+            "SELECT rowid, * FROM jobs WHERE matched=1 AND is_new=1 AND notified_at IS NULL"
+            " AND closed_at IS NULL AND score IS NULL AND status='discovered' ORDER BY first_seen LIMIT ?",
+            (limit,),
+        ).fetchall()
+        return [row_to_job(r) for r in rows]
+
+    def set_score(self, rowid: int, score: int, reasons: list[str]) -> None:
+        self.conn.execute("UPDATE jobs SET score=?, score_reasons=? WHERE rowid=?",
+                          (score, json.dumps(reasons), rowid))
+        self.conn.commit()
+
+    def update_tailored_data(self, rowid: int, data: dict, note: str) -> None:
+        rec = self.get_tailored(rowid)
+        warnings = [w for w in rec["warnings"] if w != note] + [note]
+        self.conn.execute("UPDATE tailored SET data=?, warnings=? WHERE job_rowid=?",
+                          (json.dumps(data), json.dumps(warnings), rowid))
+        self.conn.commit()
 
     def get_job(self, rowid: int) -> sqlite3.Row | None:
         return self.conn.execute("SELECT rowid, * FROM jobs WHERE rowid=?", (rowid,)).fetchone()

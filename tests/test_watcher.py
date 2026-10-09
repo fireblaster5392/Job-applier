@@ -74,7 +74,8 @@ class FakeNotifier:
 class PollTests(unittest.TestCase):
     def setUp(self):
         self.gh = {"jobs": list(GH["jobs"])}
-        self.cfg = {"companies": {"greenhouse": ["acme", "nope"], "lever": ["acme"], "ashby": ["acme"]}}
+        self.cfg = {"pipeline": {"mode": "manual"},
+                    "companies": {"greenhouse": ["acme", "nope"], "lever": ["acme"], "ashby": ["acme"]}}
         self.store = JobStore(":memory:")
 
     def handler(self, request: httpx.Request):
@@ -116,6 +117,16 @@ class PollTests(unittest.TestCase):
         n = FakeNotifier()
         self.poll(n)
         self.assertEqual([j.job_id for j in n.sent], ["104"])
+
+    def test_auto_mode_leaves_notifying_to_the_worker(self):
+        self.cfg["pipeline"]["mode"] = "auto"
+        n = FakeNotifier()
+        self.poll(n)
+        self.gh["jobs"].append({"id": 105, "title": "Software Engineer", "location": {"name": "New York"},
+                                "absolute_url": "https://x/105"})
+        self.poll(n)
+        self.assertEqual(n.sent, [])
+        self.assertEqual([j.job_id for j in self.store.jobs_to_score()], ["105"])
 
     def test_removed_job_is_marked_closed(self):
         self.poll(FakeNotifier())

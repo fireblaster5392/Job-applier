@@ -4,14 +4,22 @@ Job application automation, following `architecture/job-automation-architecture.
 
 ## How it works
 
-1. **Watcher** finds a new job that matches your filters and sends it to Telegram with
-   **Tailor resume** and **Skip** buttons.
-2. **Tailor resume** has Claude pick and lightly reword bullets from `profile/resume.yaml`,
-   write a cover letter and score your fit. Guardrails drop any bullet id that doesn't exist,
-   revert rewrites that add numbers, and drop skills you don't list.
-3. Telegram shows the score with **Approve / Reject** and a link to the **dashboard**, where you
-   read the resume and cover letter side by side and print them to PDF.
+1. **Watcher** polls every company's job board every 60 seconds and keeps jobs whose title and
+   location match your filters.
+2. **Worker** gives each new match a quick fit score (Haiku, about $0.0005 a job).
+   - **Score ≥ threshold** (default 70): Claude tailors your resume and cover letter right away,
+     and Telegram gets one message with both files, the score and **Approve / Edit / Skip**.
+   - **Below threshold:** no message, but it's listed on the dashboard under `below_threshold`
+     with its score and reasons, and you can tailor it from there. Nothing is dropped.
+   - If scoring or tailoring fails, the job is sent as a plain alert with a **Tailor** button.
+3. **Edit** opens the dashboard, where you can change the summary, bullets, skills and cover letter.
 4. **Approve** marks the job approved. Nothing is submitted anywhere yet; auto-apply is the next step.
+
+Tailoring may only pick and lightly reword bullets from `profile/resume.yaml`. Guardrails drop any
+bullet id that doesn't exist, revert rewrites that add numbers, and drop skills you don't list.
+
+Set `[pipeline] mode = "manual"` in `config.toml` to get every match in Telegram first and tap
+**Tailor resume** yourself instead.
 
 ## Layout
 
@@ -20,7 +28,8 @@ Job application automation, following `architecture/job-automation-architecture.
 | `watcher/` | 60-second poller for Greenhouse, Lever, Ashby + Telegram alerts | Built |
 | `profile/` | Master resume (`resume.yaml`), standard answers | **Placeholder: replace with yours** |
 | `profile_mcp/` | Profile loading/search + MCP server for Claude Code / Desktop | Built |
-| `tailor/` | Claude tailoring, guardrails, resume + cover letter rendering | Built |
+| `tailor/` | Fit scoring, Claude tailoring, guardrails, resume + cover letter rendering | Built |
+| `worker/` | Auto pipeline: score, tailor good fits, send to Telegram | Built |
 | `bot/` | Telegram button handler | Built |
 | `web/` | Approval queue + dashboard (FastAPI) | Built |
 | `apply/` | Greenhouse / Lever / Ashby form adapters, stop before Submit | Next |
@@ -38,19 +47,21 @@ pip install -r requirements.txt
 cp .env.example .env            # fill in Telegram + ANTHROPIC_API_KEY
 set -a; source .env; set +a
 
-python -m watcher.main --db data/jobs.db                          # terminal 1
-python -m bot.main --db data/jobs.db                              # terminal 2
-DB_PATH=data/jobs.db uvicorn --factory web.app:main_app --port 8000   # terminal 3, open localhost:8000
+python -m watcher.main --db data/jobs.db                          # finds jobs
+python -m worker.main --db data/jobs.db                           # scores + tailors + sends
+python -m bot.main --db data/jobs.db                              # handles Telegram buttons
+DB_PATH=data/jobs.db uvicorn --factory web.app:main_app --port 8000   # dashboard at localhost:8000
 ```
 
-On a VPS: `docker compose up -d` runs all three.
+On a VPS: `docker compose up -d` runs all four.
 
 **Use your profile from Claude Code:** `claude mcp add profile -- python -m profile_mcp.server`
 gives Claude `search_experience`, `get_profile` and `render_resume`.
 
-**Cost:** tailoring uses `claude-opus-5-5` by default (about $0.14 a job, profile cached).
-Change `[tailor] model` in `config.toml` to `claude-sonnet-5-5` to roughly halve it.
-The watcher, bot and dashboard make no Claude calls.
+**Cost:** scoring every match with Haiku is about $0.0005 a job; tailoring a good fit with
+`claude-opus-5-5` is about $0.14 (profile cached). Change `[tailor] model` to `claude-sonnet-5-5`
+to roughly halve tailoring, or raise `score_threshold` to tailor fewer jobs. The watcher, bot and
+dashboard make no Claude calls.
 
 ## The watcher
 

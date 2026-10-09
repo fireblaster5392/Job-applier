@@ -81,11 +81,13 @@ async def poll_once(cfg, store: JobStore, notifier: Notifier, client, is_match) 
 
     await asyncio.gather(*(one(a, s) for a, s in boards))
 
-    pending = store.pending_notifications()
-    for job in pending:
-        if await notifier.send(job):
-            store.mark_notified(job)
-    stats["notified"] = len(pending)
+    # In auto mode the worker scores, tailors and notifies; the watcher only collects jobs.
+    if cfg.get("pipeline", {}).get("mode", "auto") == "manual":
+        pending = store.pending_notifications()
+        for job in pending:
+            if await notifier.send(job):
+                store.mark_notified(job)
+        stats["notified"] = len(pending)
     return stats
 
 

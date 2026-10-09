@@ -58,3 +58,41 @@ class Notifier:
         except httpx.HTTPError as exc:
             log.error("telegram send failed for %s: %s", job.key, exc)
             return False
+
+    async def send_tailored(self, job: Job, rec: dict, files: dict[str, str], dashboard_url: str = "") -> bool:
+        """One message per tailored job: the resume and cover letter as files, then the score with
+        Approve / Edit / Skip buttons. files maps filename -> HTML content."""
+        d, e = rec["data"], html.escape
+        lines = [format_job(job), "", f"🎯 Fit <b>{d['fit_score']}/100</b>"]
+        lines += [f"• {e(r)}" for r in d["fit_reasons"][:3]]
+        if d["gaps"]:
+            lines.append("Gaps: " + e("; ".join(d["gaps"][:3])))
+        if rec["warnings"]:
+            lines.append(f"Guardrails fixed {len(rec['warnings'])} thing(s) in the draft.")
+        text = "\n".join(lines)
+        buttons = [[{"text": "✅ Approve", "callback_data": f"approve:{job.db_id}"}]]
+        if dashboard_url:
+            buttons[0].append({"text": "✏️ Edit", "url": f"{dashboard_url.rstrip('/')}/jobs/{job.db_id}/edit"})
+        buttons[0].append({"text": "Skip", "callback_data": f"skip:{job.db_id}"})
+        buttons.append([{"text": "Open posting", "url": job.url}])
+        if self.dry_run:
+            print(f"\n[tailored] {text}\nfiles: {list(files)}\n{job.url}\n")
+            return True
+        try:
+            for name, content in files.items():
+                resp = await self.client.post(
+                    API.format(token=self.token, method="sendDocument"),
+                    data={"chat_id": self.chat_id},
+                    files={"document": (name, content.encode(), "text/html")},
+                )
+                resp.raise_for_status()
+            resp = await self.client.post(
+                API.format(token=self.token, method="sendMessage"),
+                json={"chat_id": self.chat_id, "text": text, "parse_mode": "HTML",
+                      "disable_web_page_preview": True, "reply_markup": {"inline_keyboard": buttons}},
+            )
+            resp.raise_for_status()
+            return True
+        except httpx.HTTPError as exc:
+            log.error("telegram send failed for %s: %s", job.key, exc)
+            return False

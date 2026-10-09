@@ -7,7 +7,7 @@ Keep it private (Tailscale or Cloudflare Access); it has no login of its own.
 import os
 import threading
 
-from fastapi import BackgroundTasks, FastAPI, Form, HTTPException
+from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from profile_mcp.profile import Profile
@@ -20,7 +20,7 @@ from watcher.main import load_config
 
 from .templates import env
 
-STATUSES = ["discovered", "tailoring", "tailored", "approved", "rejected", "skipped", "failed"]
+STATUSES = ["tailored", "below_threshold", "discovered", "tailoring", "approved", "rejected", "skipped", "failed"]
 SETTABLE = {"approved", "rejected", "skipped", "discovered"}
 
 
@@ -59,6 +59,37 @@ def create_app(db_path: str, profile_loader=Profile.load, tailor=tailor_job,
         with lock:
             t = store.get_tailored(rowid)
         return env.get_template("job").render(job=job, t=t)
+
+    @app.get("/jobs/{rowid}/edit", response_class=HTMLResponse)
+    def edit_page(rowid: int):
+        job = job_or_404(rowid)
+        with lock:
+            t = store.get_tailored(rowid)
+        if t is None:
+            return RedirectResponse(f"/jobs/{rowid}", status_code=303)
+        return env.get_template("edit").render(job=job, t=t)
+
+    @app.post("/jobs/{rowid}/edit")
+    async def save_edit(rowid: int, request: Request):
+        job_or_404(rowid)
+        form = await request.form()
+        with lock:
+            rec = store.get_tailored(rowid)
+            if rec is None:
+                raise HTTPException(404, "Not tailored yet")
+            data = rec["data"]
+            data["summary"] = str(form.get("summary", data["summary"])).strip()
+            data["cover_letter"] = str(form.get("cover_letter", data["cover_letter"])).replace("\r\n", "\n").strip()
+            data["skills"] = [s.strip() for s in str(form.get("skills", "")).split(",") if s.strip()]
+            bullets = []
+            for b in data["bullets"]:
+                text = str(form.get(f"bullet_{b['id']}", b["text"])).strip()
+                if text:                      # clear a bullet's text to remove it
+                    bullets.append({"id": b["id"], "text": text})
+            data["bullets"] = bullets
+            # Your own edits are trusted, so guardrails don't re-run on them.
+            store.update_tailored_data(rowid, data, "You edited this draft.")
+        return RedirectResponse(f"/jobs/{rowid}", status_code=303)
 
     @app.get("/jobs/{rowid}/resume", response_class=HTMLResponse)
     def resume(rowid: int):
