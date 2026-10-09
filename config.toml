@@ -28,6 +28,10 @@ score_model = "claude-haiku-5-5"
 notify_below_threshold = false
 
 [tailor]
+# Who scores and tailors: "claude" (built in) or "mcp" (your own tailoring server, see
+# docs/tailoring-server.md). With "mcp", set mcp_server to its URL or command.
+provider = "claude"
+# mcp_server = "http://127.0.0.1:9000/mcp"
 # Model for resume + cover letter tailoring (about $0.14 a job on Opus 5.5).
 # "claude-sonnet-5-5" roughly halves the cost if the quality holds up for you.
 model = "claude-opus-5-5"

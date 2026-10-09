@@ -21,6 +21,7 @@ import httpx
 
 from profile_mcp.profile import Profile
 from tailor.claude import DEFAULT_MODEL
+from tailor.provider import load_provider
 from watcher.db import JobStore, row_to_job
 from watcher.main import load_config
 from watcher.notify import Notifier
@@ -125,6 +126,7 @@ async def run(db_path: str, cfg_path: str, dry_run: bool, interval: int) -> None
     cfg = load_config(cfg_path)
     async with httpx.AsyncClient(timeout=60) as client:
         q = ApplyQueue(JobStore(db_path), Notifier(client), cfg, dry_run=dry_run,
+                       profile_loader=load_provider(cfg).profile,
                        out_root=Path(os.path.dirname(os.path.abspath(db_path))) / "applications",
                        dashboard_url=os.environ.get("DASHBOARD_URL", ""))
         log.info("apply queue running%s: max %d/day, %d-%d min apart", " (dry run)" if q.dry_run else "",

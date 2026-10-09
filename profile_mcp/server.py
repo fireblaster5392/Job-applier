@@ -63,6 +63,32 @@ def _store():
     return JobStore(os.environ.get("DB_PATH", "data/jobs.db"))
 
 
+# --- The tailoring contract (docs/tailoring-server.md). This server is the reference
+# implementation: same answers as the built-in Claude tailoring. A custom server exposes these
+# three tools with the same inputs and outputs and the pipeline uses it via [tailor] provider = "mcp".
+
+@mcp.tool()
+def get_resume_profile() -> dict:
+    """The full master profile in the resume.yaml shape: basics, experience and projects with
+    bullet ids and tags, education, skills."""
+    return default_profile().data
+
+
+@mcp.tool()
+def score_fit(job: dict, description: str) -> dict:
+    """Quick fit score. job: title, company, location, ats, url. Returns {score: 0-100, reasons: [...]}."""
+    from tailor.provider import ClaudeProvider
+    return ClaudeProvider(profile_loader=default_profile).score(job, description).model_dump()
+
+
+@mcp.tool()
+def tailor_application(job: dict, description: str) -> dict:
+    """Tailored resume selection and cover letter for one job, as a TailoredApplication plus usage."""
+    from tailor.provider import ClaudeProvider
+    app, usage = ClaudeProvider(profile_loader=default_profile).tailor(job, description)
+    return {**app.model_dump(), "usage": usage}
+
+
 @mcp.tool()
 def list_jobs(status: str = "", limit: int = 25) -> list[dict]:
     """Matching jobs in the pipeline, newest first. status: tailored, needs_review, needs_you,

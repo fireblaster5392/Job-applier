@@ -34,7 +34,8 @@ class McpServerTests(unittest.TestCase):
 
     def test_tools_listed_and_search(self):
         tools, result = self.call("search_experience", {"query": "python api", "k": 2})
-        self.assertEqual(tools, {"search_experience", "get_profile", "render_resume", "list_jobs", "get_job"})
+        self.assertEqual(tools, {"search_experience", "get_profile", "render_resume", "list_jobs", "get_job",
+                                 "get_resume_profile", "score_fit", "tailor_application"})
         self.assertFalse(result.is_error)
         self.assertIn("exco-api", result.content[0].text)
 

@@ -27,6 +27,7 @@ from outreach.telegram import send_contact_drafts
 from profile_mcp.profile import Profile
 from tailor.claude import DEFAULT_MODEL
 from tailor.pipeline import tailor_job
+from tailor.provider import load_provider
 from tailor.render import cover_letter_html, resume_html
 from tailor.schema import TailoredApplication
 from tailor.score import DEFAULT_SCORE_MODEL, score_job
@@ -45,13 +46,16 @@ def _slug(text: str) -> str:
 
 class Worker:
     def __init__(self, store: JobStore, notifier: Notifier, cfg: dict, *, profile_loader=Profile.load,
-                 dashboard_url: str = "", claude=None, http_client=None):
+                 dashboard_url: str = "", claude=None, http_client=None, provider=None):
         p = cfg.get("pipeline", {})
         self.threshold = p.get("score_threshold", 70)
         self.score_model = p.get("score_model", DEFAULT_SCORE_MODEL)
         self.notify_below = p.get("notify_below_threshold", False)
         self.tailor_model = cfg.get("tailor", {}).get("model", DEFAULT_MODEL)
         self.store, self.notifier = store, notifier
+        self.provider = provider   # tailor.provider; None = Claude with the models above
+        if provider is not None:
+            profile_loader = provider.profile
         self.profile_loader, self.dashboard_url = profile_loader, dashboard_url
         o = cfg.get("outreach", {})
         self.outreach_on = o.get("enabled", True)
@@ -145,11 +149,15 @@ class Worker:
 
     async def handle(self, job: Job) -> str:
         profile = self.profile_loader()
-        info = {"title": job.title, "company": job.company, "location": job.location}
+        info = {"title": job.title, "company": job.company, "location": job.location,
+                "ats": job.ats, "url": job.url}
         try:
             description = await asyncio.to_thread(job_description, job, self.http_client)
-            fit = await asyncio.to_thread(score_job, info, description or job.title, profile,
-                                          model=self.score_model, client=self.claude)
+            if self.provider is not None:
+                fit = await asyncio.to_thread(self.provider.score, info, description or job.title)
+            else:
+                fit = await asyncio.to_thread(score_job, info, description or job.title, profile,
+                                              model=self.score_model, client=self.claude)
             self.store.set_score(job.db_id, fit.score, fit.reasons)
             log.info("%s at %s: score %d", job.title, job.company, fit.score)
 
@@ -160,7 +168,7 @@ class Worker:
                 return "below"
 
             rec = await asyncio.to_thread(tailor_job, self.store, job.db_id, profile, model=self.tailor_model,
-                                          client=self.claude, description=description)
+                                          client=self.claude, description=description, provider=self.provider)
         except Exception as exc:  # noqa: BLE001 - fall back to a plain alert so the job isn't lost
             log.warning("auto pipeline failed for %s: %s; sending a plain alert", job.key, exc)
             self.store.set_status(job.db_id, "discovered", str(exc))
@@ -179,9 +187,9 @@ async def run(db_path: str, cfg_path: str, interval: int, dry_run: bool) -> None
     cfg = load_config(cfg_path)
     async with httpx.AsyncClient(timeout=60) as client:
         worker = Worker(JobStore(db_path), Notifier(client, dry_run=dry_run), cfg,
-                        dashboard_url=os.environ.get("DASHBOARD_URL", ""))
-        log.info("worker running: threshold %d, scoring with %s, tailoring with %s",
-                 worker.threshold, worker.score_model, worker.tailor_model)
+                        dashboard_url=os.environ.get("DASHBOARD_URL", ""), provider=load_provider(cfg))
+        log.info("worker running: threshold %d, tailoring provider %s", worker.threshold,
+                 cfg.get("tailor", {}).get("provider", "claude"))
         while True:
             stats = await worker.run_once()
             if any(stats.values()):

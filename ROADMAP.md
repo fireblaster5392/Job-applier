@@ -45,6 +45,7 @@ leaves their hands.
 | 1 | **Job watcher**: Greenhouse, Lever, Ashby APIs every 60 s, dedupe in SQLite | ✅ Built |
 | 2 | **Profile**: master resume with tagged bullet ids, standard answers, job-search MCP server (stdio locally, HTTP `mcp` service on the VPS) | ✅ Built (placeholder data) |
 | 3 | **Fit scoring**: Haiku scores every match 0-100 | ✅ Built |
+| 3b | **Tailoring interface**: profile, scoring and tailoring behind one provider; built-in Claude by default, or the user's own MCP tailoring server (`docs/tailoring-server.md`) | ✅ Built (interface); user's server in progress |
 | 4 | **Tailor first, approve once**: score ≥ threshold → tailored resume + cover letter → one Telegram message with Approve / Edit / Skip; lower scores listed on the dashboard | ✅ Built |
 | 5 | **Dashboard**: pipeline, tailored docs, editor, approval buttons | ✅ Built |
 | 6 | **Auto-apply**: fill Greenhouse / Lever / Ashby forms, upload PDFs, submit on Approve, human pacing and daily cap, CAPTCHAs and essay questions handed to the user | ✅ Built (tested on local form copies; needs a live dry run) |
@@ -66,6 +67,9 @@ leaves their hands.
 - **No CAPTCHA bots.** CAPTCHAs are handed to the user; pacing keeps volume human.
 - **Outreach after applying**: hiring manager first, then engineers, then recruiters.
 - **Networking runs separately** from job applications, every morning.
+- **The user builds their own tailoring MCP server** (their info, resume rules, keywords, project
+  list). The pipeline calls it through `tailor/provider.py`; guardrails and `answers.yaml` stay on
+  the pipeline side.
 - **Models**: Haiku for scoring and email classification, Opus for tailoring and drafting
   (switchable to Sonnet in `config.toml` to cut cost).
 

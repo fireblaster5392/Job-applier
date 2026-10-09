@@ -4,6 +4,7 @@
 
 Keep it private (Tailscale or Cloudflare Access); it has no login of its own.
 """
+import functools
 import os
 import threading
 
@@ -18,6 +19,7 @@ from outreach.store import (get_message, mark_linkedin_sent, mark_replied, netwo
 from profile_mcp.profile import Profile
 from tailor.claude import DEFAULT_MODEL
 from tailor.pipeline import tailor_job
+from tailor.provider import load_provider
 from tailor.render import cover_letter_html, resume_html
 from tailor.schema import TailoredApplication
 from watcher.db import JobStore
@@ -213,6 +215,8 @@ def create_app(db_path: str, profile_loader=Profile.load, tailor=tailor_job,
 def main_app() -> FastAPI:
     cfg_path = os.environ.get("CONFIG_PATH", "config.toml")
     cfg = load_config(cfg_path) if os.path.exists(cfg_path) else {}
+    provider = load_provider(cfg)
     return create_app(os.environ.get("DB_PATH", "data/jobs.db"),
+                      profile_loader=provider.profile, tailor=functools.partial(tailor_job, provider=provider),
                       model=cfg.get("tailor", {}).get("model", DEFAULT_MODEL),
                       max_emails_per_day=cfg.get("outreach", {}).get("max_emails_per_day", 10))

@@ -87,6 +87,9 @@ On a VPS: `docker compose up -d` runs all six.
 The apply queue needs Chromium: `pip install playwright && playwright install chromium` locally
 (the Docker image has it).
 
+**Your own tailoring server:** set `[tailor] provider = "mcp"` in `config.toml`. The tool names,
+schemas and a suggested profile structure are in [docs/tailoring-server.md](docs/tailoring-server.md).
+
 **Job-search MCP server** (`profile_mcp/server.py`). Tools: `search_experience`, `get_profile`,
 `render_resume`, `list_jobs`, `get_job`. It reads the same `profile/` files and `data/jobs.db` the
 pipeline uses, so you can ask Claude things like "which tailored jobs are waiting on me?" or "draft a

@@ -7,6 +7,7 @@ Nothing is submitted anywhere: "Approve" only marks the job approved in the data
 """
 import argparse
 import asyncio
+import functools
 import html
 import logging
 import os
@@ -19,6 +20,7 @@ from outreach.store import mark_linkedin_sent, send_email_message, skip_message
 from profile_mcp.profile import Profile
 from tailor.claude import DEFAULT_MODEL
 from tailor.pipeline import tailor_job
+from tailor.provider import load_provider
 from watcher.db import JobStore
 from watcher.main import load_config
 
@@ -165,7 +167,9 @@ async def run(db_path: str, cfg_path: str) -> None:
     chat_id = os.environ.get("TELEGRAM_CHAT_ID") or exit("set TELEGRAM_CHAT_ID")
     cfg = load_config(cfg_path) if os.path.exists(cfg_path) else {}
     async with httpx.AsyncClient() as client:
+        provider = load_provider(cfg)
         bot = Bot(JobStore(db_path), client, token=token, chat_id=chat_id,
+                  profile_loader=provider.profile, tailor=functools.partial(tailor_job, provider=provider),
                   model=cfg.get("tailor", {}).get("model", DEFAULT_MODEL),
                   dashboard_url=os.environ.get("DASHBOARD_URL", ""),
                   store_factory=lambda: JobStore(db_path),
