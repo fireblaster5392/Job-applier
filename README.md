@@ -20,6 +20,18 @@ Job application automation, following `architecture/job-automation-architecture.
    - **LinkedIn notes** are in a tap-to-copy block with an "Open profile" button. You send them
      yourself; nothing ever logs into your LinkedIn.
    - **Emails** go out only when you tap **Send email**, with a daily cap (`max_emails_per_day`).
+6. **Inbox sync** reads your inbox (read-only) every 2 minutes. Replies to your outreach are
+   matched to the person and job; the companies' application emails (confirmation, assessment,
+   interview, rejection, offer) update the job's application status. Replies, interviews,
+   assessments, offers and rejections also ping you on Telegram.
+7. **Daily networking** (separate from jobs): every morning, 5 founders or recruiters at target
+   companies get a drafted note asking for a 15-minute chat, even with no open role. Same rules:
+   LinkedIn notes you paste, emails on your tap. Companies aren't contacted again for 90 days.
+8. **Follow-ups:** anyone who hasn't replied after 5 days gets one drafted follow-up for you to
+   send (emails stay in the same thread). Tap **I sent it** on LinkedIn notes so they're tracked too.
+
+The dashboard shows, per job: the tailored documents, application status, the company's emails,
+and every outreach message with its replies. The **Networking** page tracks the daily contacts.
 
 Tailoring may only pick and lightly reword bullets from `profile/resume.yaml`. Guardrails drop any
 bullet id that doesn't exist, revert rewrites that add numbers, and drop skills you don't list.
@@ -40,7 +52,8 @@ Set `[pipeline] mode = "manual"` in `config.toml` to get every match in Telegram
 | `web/` | Approval queue + dashboard (FastAPI) | Built |
 | `apply/` | Greenhouse / Lever / Ashby form adapters, stop before Submit | Next |
 | `outreach/` | Contact finding, message drafts, email sending on your tap | Built |
-| `mail/` | Gmail reply tracking + classifier | Later |
+| `mail/` | Inbox sync: replies + application emails | Built |
+| `networking/` | Daily networking batch + follow-ups | Built |
 | `data/` | SQLite database (git-ignored) | |
 
 Secrets go in `.env` (copy `.env.example`); never commit it.
@@ -56,10 +69,11 @@ set -a; source .env; set +a
 python -m watcher.main --db data/jobs.db                          # finds jobs
 python -m worker.main --db data/jobs.db                           # scores + tailors + sends
 python -m bot.main --db data/jobs.db                              # handles Telegram buttons
+python -m mail.main --db data/jobs.db                             # reads replies + application emails
 DB_PATH=data/jobs.db uvicorn --factory web.app:main_app --port 8000   # dashboard at localhost:8000
 ```
 
-On a VPS: `docker compose up -d` runs all four.
+On a VPS: `docker compose up -d` runs all five.
 
 **Use your profile from Claude Code:** `claude mcp add profile -- python -m profile_mcp.server`
 gives Claude `search_experience`, `get_profile` and `render_resume`.

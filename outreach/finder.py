@@ -18,12 +18,27 @@ log = logging.getLogger(__name__)
 BRAVE_URL = "https://api.search.brave.com/res/v1/web/search"
 APOLLO = "https://api.apollo.io/api/v1"
 
-# Higher rank = contacted first: the hiring manager beats a teammate beats a recruiter.
-RANKS = [
-    (r"\b(engineering manager|head of engineering|director of engineering|vp,? engineering|cto|hiring manager)\b", 3),
-    (r"\b(staff|senior|lead|principal)?\s*(software|backend|frontend|platform|data|ml|machine learning)\s+engineer\b", 2),
-    (r"\b(technical recruiter|recruiter|talent|sourcer)\b", 1),
-]
+# Higher rank = contacted first.
+# job: after applying, the hiring manager beats a teammate beats a recruiter.
+# network: cold outreach to startups, where founders and early recruiters decide.
+RANKS = {
+    "job": [
+        (r"\b(engineering manager|head of engineering|director of engineering|vp,? engineering|cto|hiring manager)\b", 3),
+        (r"\b(staff|senior|lead|principal)?\s*(software|backend|frontend|platform|data|ml|machine learning)\s+engineer\b", 2),
+        (r"\b(technical recruiter|recruiter|talent|sourcer)\b", 1),
+    ],
+    "network": [
+        (r"\b(co-?founder|founder|ceo|cto)\b", 3),
+        (r"\b(head of talent|technical recruiter|recruiter|talent|people)\b", 2),
+        (r"\b(engineering manager|head of engineering|vp,? engineering)\b", 2),
+    ],
+}
+SEARCH_ROLES = {
+    "job": ('("engineering manager" OR "hiring manager" OR recruiter OR "software engineer")',
+            ["engineering manager", "software engineer", "technical recruiter", "recruiter"]),
+    "network": ('(founder OR "co-founder" OR CTO OR recruiter OR "head of talent")',
+                ["founder", "co-founder", "cto", "ceo", "head of talent", "technical recruiter", "recruiter"]),
+}
 
 
 @dataclass
@@ -38,9 +53,9 @@ class Contact:
     extra: dict = field(default_factory=dict, repr=False)
 
 
-def rank_title(title: str) -> int:
+def rank_title(title: str, mode: str = "job") -> int:
     t = title.lower()
-    return max((r for pattern, r in RANKS if re.search(pattern, t)), default=0)
+    return max((r for pattern, r in RANKS[mode] if re.search(pattern, t)), default=0)
 
 
 def _clean_linkedin(url: str) -> str:
@@ -49,7 +64,7 @@ def _clean_linkedin(url: str) -> str:
     return f"https://www.linkedin.com/in/{m.group(1)}" if m else ""
 
 
-def parse_brave(data: dict, company: str) -> list[Contact]:
+def parse_brave(data: dict, company: str, mode: str = "job") -> list[Contact]:
     out = []
     for r in (data.get("web") or {}).get("results", []):
         url = _clean_linkedin(r.get("url", ""))
@@ -63,20 +78,19 @@ def parse_brave(data: dict, company: str) -> list[Contact]:
         name, title = parts[0], (parts[1] if len(parts) > 1 else "")
         if company.lower() not in (r.get("title", "") + " " + r.get("description", "")).lower():
             continue  # probably a former employee or a namesake
-        out.append(Contact(name, title, company, linkedin_url=url, source="brave", rank=rank_title(title)))
+        out.append(Contact(name, title, company, linkedin_url=url, source="brave", rank=rank_title(title, mode)))
     return out
 
 
-def search_brave(client: httpx.Client, company: str, role_hint: str, key: str) -> list[Contact]:
-    roles = '("engineering manager" OR "hiring manager" OR recruiter OR "software engineer")'
-    q = f'site:linkedin.com/in "{company}" {roles} {role_hint}'.strip()
+def search_brave(client: httpx.Client, company: str, role_hint: str, key: str, mode: str = "job") -> list[Contact]:
+    q = f'site:linkedin.com/in "{company}" {SEARCH_ROLES[mode][0]} {role_hint}'.strip()
     resp = client.get(BRAVE_URL, params={"q": q, "count": 20},
                       headers={"X-Subscription-Token": key, "Accept": "application/json"})
     resp.raise_for_status()
-    return parse_brave(resp.json(), company)
+    return parse_brave(resp.json(), company, mode)
 
 
-def search_apollo(client: httpx.Client, company: str, key: str, reveal: int) -> list[Contact]:
+def search_apollo(client: httpx.Client, company: str, key: str, reveal: int, mode: str = "job") -> list[Contact]:
     headers = {"x-api-key": key, "Content-Type": "application/json"}
     orgs = client.post(f"{APOLLO}/mixed_companies/search", headers=headers,
                        json={"q_organization_name": company, "per_page": 1})
@@ -87,7 +101,7 @@ def search_apollo(client: httpx.Client, company: str, key: str, reveal: int) -> 
     org_id = org_list[0].get("id") or org_list[0].get("organization_id")
     people = client.post(f"{APOLLO}/mixed_people/search", headers=headers, json={
         "organization_ids": [org_id], "per_page": 25,
-        "person_titles": ["engineering manager", "software engineer", "technical recruiter", "recruiter"],
+        "person_titles": SEARCH_ROLES[mode][1],
     })
     people.raise_for_status()
     contacts = []
@@ -97,7 +111,7 @@ def search_apollo(client: httpx.Client, company: str, key: str, reveal: int) -> 
             email = ""
         contacts.append(Contact(p.get("name") or "", p.get("title") or "", company,
                                 linkedin_url=p.get("linkedin_url") or "", email=email, source="apollo",
-                                rank=rank_title(p.get("title") or ""), extra={"apollo_id": p.get("id")}))
+                                rank=rank_title(p.get("title") or "", mode), extra={"apollo_id": p.get("id")}))
     contacts.sort(key=lambda c: -c.rank)
     for c in contacts[:reveal]:
         if c.email or not c.extra.get("apollo_id"):
@@ -125,7 +139,7 @@ def merge(contacts: list[Contact]) -> list[Contact]:
     return list(by_key.values())
 
 
-def find_contacts(company: str, role_hint: str = "", *, limit: int = 3,
+def find_contacts(company: str, role_hint: str = "", *, limit: int = 3, mode: str = "job",
                   client: httpx.Client | None = None) -> list[Contact]:
     """Best `limit` contacts, highest rank first; people with a rank of 0 are left out."""
     brave_key, apollo_key = os.environ.get("BRAVE_API_KEY"), os.environ.get("APOLLO_API_KEY")
@@ -138,12 +152,12 @@ def find_contacts(company: str, role_hint: str = "", *, limit: int = 3,
     try:
         if brave_key:
             try:
-                found += search_brave(client, company, role_hint, brave_key)
+                found += search_brave(client, company, role_hint, brave_key, mode)
             except httpx.HTTPError as exc:
                 log.warning("brave search failed for %s: %s", company, exc)
         if apollo_key:
             try:
-                found += search_apollo(client, company, apollo_key, reveal=limit)
+                found += search_apollo(client, company, apollo_key, reveal=limit, mode=mode)
             except httpx.HTTPError as exc:
                 log.warning("apollo search failed for %s: %s", company, exc)
     finally:

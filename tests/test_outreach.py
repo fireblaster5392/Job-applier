@@ -65,10 +65,11 @@ class FakeMailer:
     def __init__(self, fail=False):
         self.sent, self.fail = [], fail
 
-    def send(self, to, subject, body):
+    def send(self, to, subject, body, in_reply_to=None):
         if self.fail:
             raise OSError("smtp down")
         self.sent.append((to, subject, body))
+        return f"<{len(self.sent)}@test>"
 
 
 class FinderTests(unittest.TestCase):
@@ -136,7 +137,7 @@ class WorkerOutreachTests(unittest.TestCase):
                     lambda r: sent.append(json.loads(r.content)) or httpx.Response(200, json={"ok": True}))) as c:
                 n = Notifier(c)
                 n.token, n.chat_id, n.dry_run = "T", "42", False
-                w = Worker(store, n, {}, profile_loader=lambda: PROFILE, claude=claude_drafts(2))
+                w = Worker(store, n, {"networking": {"enabled": False}}, profile_loader=lambda: PROFILE, claude=claude_drafts(2))
                 w.find_contacts = lambda company, hint, limit: [
                     Contact("Jane Doe", "Engineering Manager", company, linkedin_url="https://www.linkedin.com/in/j",
                             email="jane@acme.com", rank=3),

@@ -19,9 +19,11 @@ import re
 
 import httpx
 
+from networking.daily import due as networking_due, followups, run_daily
 from outreach.draft import draft_messages
 from outreach.finder import find_contacts
 from outreach.store import jobs_needing_outreach, save_outreach
+from outreach.telegram import send_contact_drafts
 from profile_mcp.profile import Profile
 from tailor.claude import DEFAULT_MODEL
 from tailor.pipeline import tailor_job
@@ -58,6 +60,8 @@ class Worker:
         self.outreach_model = o.get("model", DEFAULT_MODEL)
         self.claude, self.http_client = claude, http_client   # injectable for tests
         self.find_contacts = find_contacts
+        self.cfg = cfg
+        self.networking_on = cfg.get("networking", {}).get("enabled", True)
 
     async def run_once(self) -> dict:
         stats = {"tailored": 0, "below": 0, "fallback": 0, "resent": 0, "outreach": 0}
@@ -68,7 +72,22 @@ class Worker:
             for row in jobs_needing_outreach(self.store, self.outreach_statuses):
                 await self.outreach(row)
                 stats["outreach"] += 1
+        if self.networking_on and networking_due(self.store, self.cfg):
+            await self.networking()
+        stats["followups"] = await followups(self.store, self.notifier, self.cfg, self.profile_loader())
         return stats
+
+    async def networking(self) -> None:
+        from zoneinfo import ZoneInfo
+        from datetime import datetime
+        tz = ZoneInfo(self.cfg.get("networking", {}).get("timezone", "America/Edmonton"))
+        self.store.set_state("network_last_day", datetime.now(tz).date().isoformat())  # once a day, even on failure
+        try:
+            await run_daily(self.store, self.notifier, self.cfg, self.profile_loader(), claude=self.claude,
+                            finder=self.find_contacts)
+        except Exception as exc:  # noqa: BLE001
+            log.warning("daily networking failed: %s", exc)
+            await self.notifier.send_text(f"⚠️ Today's networking batch failed: {html.escape(str(exc))}")
 
     async def outreach(self, row) -> None:
         """Find contacts for an approved job, draft messages, and send them to you to review.
@@ -97,20 +116,7 @@ class Worker:
             await self.notifier.send_text(f"🔎 No contacts found for <b>{e(label)}</b>.")
             return
         await self.notifier.send_text(f"🤝 Outreach for <b>{e(label)}</b>: {len(saved)} contact(s) below.")
-        for i, item in enumerate(saved):
-            c, d = item["contact"], drafts.get(i)
-            head = f"👤 <b>{e(c.name)}</b>, {e(c.title or 'title unknown')}"
-            if item["linkedin_msg_id"] and d:
-                await self.notifier.send_text(
-                    f"{head}\nLinkedIn note (tap to copy, then send it yourself):\n<code>{e(d.linkedin_note)}</code>",
-                    [[{"text": "Open LinkedIn profile", "url": c.linkedin_url}]])
-            if item["email_msg_id"] and d:
-                await self.notifier.send_text(
-                    f"{head}\n📧 Email to {e(c.email)}\n<b>Subject:</b> {e(d.email_subject)}\n\n{e(d.email_body)}",
-                    [[{"text": "📧 Send email", "callback_data": f"email:{item['email_msg_id']}"},
-                      {"text": "Don't send", "callback_data": f"noemail:{item['email_msg_id']}"}]])
-            if not d:
-                await self.notifier.send_text(f"{head}\nNo draft for this contact.")
+        await send_contact_drafts(self.notifier, saved, drafts)
 
     async def resend_unsent(self) -> int:
         """Retry messages that failed to send (e.g. Telegram was down)."""

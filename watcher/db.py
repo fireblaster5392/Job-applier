@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     score        INTEGER,           -- quick fit score 0-100 (auto mode)
     score_reasons TEXT,             -- JSON list
     outreach_at  TEXT,              -- when contacts were found and drafts sent to you
+    app_status   TEXT,              -- from the company's emails: applied | assessment | interview
+                                    -- | rejected | offer
     last_error   TEXT,
     raw          TEXT,
     PRIMARY KEY (ats, company, job_id)
@@ -55,7 +57,9 @@ CREATE TABLE IF NOT EXISTS tailored (
 
 CREATE TABLE IF NOT EXISTS contacts (
     id           INTEGER PRIMARY KEY,
-    job_rowid    INTEGER NOT NULL,
+    kind         TEXT NOT NULL DEFAULT 'job',   -- job (after an approval) | network (daily batch)
+    job_rowid    INTEGER,                       -- NULL for networking contacts
+    company      TEXT,
     name         TEXT NOT NULL,
     title        TEXT,
     linkedin_url TEXT,
@@ -71,10 +75,34 @@ CREATE TABLE IF NOT EXISTS messages (
     channel      TEXT NOT NULL,     -- linkedin (you send it yourself) | email
     subject      TEXT,
     body         TEXT NOT NULL,
-    status       TEXT NOT NULL DEFAULT 'draft',   -- draft | sending | sent | skipped | failed
+    status       TEXT NOT NULL DEFAULT 'draft',   -- draft | sending | sent | replied | skipped | failed
+    is_followup  INTEGER NOT NULL DEFAULT 0,
+    rfc_message_id TEXT,            -- Message-ID header of the sent email, to match replies
     error        TEXT,
     sent_at      TEXT,
+    replied_at   TEXT,
     created_at   TEXT NOT NULL
+);
+
+-- Emails from your inbox that matter: replies from contacts, and the companies' application emails.
+CREATE TABLE IF NOT EXISTS inbox (
+    id           INTEGER PRIMARY KEY,
+    rfc_message_id TEXT UNIQUE,
+    kind         TEXT NOT NULL,     -- reply | application
+    contact_id   INTEGER,
+    job_rowid    INTEGER,
+    from_addr    TEXT,
+    subject      TEXT,
+    snippet      TEXT,
+    category     TEXT,              -- application emails: confirmation | rejection | interview_request
+                                    -- | assessment | offer | other
+    received_at  TEXT,
+    created_at   TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS state (
+    key          TEXT PRIMARY KEY,
+    value        TEXT
 );
 
 CREATE INDEX IF NOT EXISTS jobs_first_seen ON jobs (first_seen);
@@ -175,6 +203,15 @@ class JobStore:
         return [row_to_job(r) for r in rows]
 
     # --- used by the worker, the bot, the dashboard and tailoring -------------------
+
+    def get_state(self, key: str) -> str | None:
+        row = self.conn.execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()
+        return row["value"] if row else None
+
+    def set_state(self, key: str, value: str) -> None:
+        self.conn.execute("INSERT INTO state (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value=excluded.value",
+                          (key, value))
+        self.conn.commit()
 
     def jobs_to_score(self, limit: int = 20) -> list[Job]:
         """New matching jobs the worker hasn't handled yet."""

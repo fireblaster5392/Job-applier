@@ -11,7 +11,8 @@ from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from outreach.mailer import SmtpMailer
-from outreach.store import get_message, outreach_for_job, send_email_message, skip_message
+from outreach.store import (get_message, mark_linkedin_sent, mark_replied, network_contacts, outreach_for_job,
+                            send_email_message, skip_message)
 from profile_mcp.profile import Profile
 from tailor.claude import DEFAULT_MODEL
 from tailor.pipeline import tailor_job
@@ -61,7 +62,40 @@ def create_app(db_path: str, profile_loader=Profile.load, tailor=tailor_job,
         with lock:
             t = store.get_tailored(rowid)
             outreach = outreach_for_job(store, rowid)
-        return env.get_template("job").render(job=job, t=t, outreach=outreach)
+            app_emails = store.conn.execute(
+                "SELECT * FROM inbox WHERE job_rowid=? AND kind='application' ORDER BY received_at", (rowid,)).fetchall()
+        return env.get_template("job").render(job=job, t=t, outreach=outreach, app_emails=app_emails)
+
+    @app.get("/network", response_class=HTMLResponse)
+    def network():
+        with lock:
+            people = network_contacts(store)
+        counts = {}
+        for p in people:
+            counts[p["state"]] = counts.get(p["state"], 0) + 1
+        return env.get_template("network").render(people=people, counts=counts,
+                                                  subtitle=f"{counts.get('replied', 0)} replied")
+
+    def back(m) -> RedirectResponse:
+        return RedirectResponse(f"/jobs/{m['job_rowid']}#outreach" if m["job_rowid"] else "/network", status_code=303)
+
+    @app.post("/messages/{msg_id}/linkedin-sent")
+    def linkedin_sent(msg_id: int):
+        with lock:
+            m = get_message(store, msg_id)
+            if m is None:
+                raise HTTPException(404, "Message not found")
+            mark_linkedin_sent(store, msg_id)
+        return back(m)
+
+    @app.post("/messages/{msg_id}/replied")
+    def replied(msg_id: int):
+        with lock:
+            m = get_message(store, msg_id)
+            if m is None:
+                raise HTTPException(404, "Message not found")
+            mark_replied(store, msg_id)
+        return back(m)
 
     @app.post("/messages/{msg_id}/send")
     def send_message(msg_id: int):
@@ -70,7 +104,7 @@ def create_app(db_path: str, profile_loader=Profile.load, tailor=tailor_job,
             if m is None:
                 raise HTTPException(404, "Message not found")
             send_email_message(store, msg_id, mailer or SmtpMailer(), max_emails_per_day)
-        return RedirectResponse(f"/jobs/{m['job_rowid']}#outreach", status_code=303)
+        return back(m)
 
     @app.post("/messages/{msg_id}/skip")
     def skip(msg_id: int):
@@ -79,7 +113,7 @@ def create_app(db_path: str, profile_loader=Profile.load, tailor=tailor_job,
             if m is None:
                 raise HTTPException(404, "Message not found")
             skip_message(store, msg_id)
-        return RedirectResponse(f"/jobs/{m['job_rowid']}#outreach", status_code=303)
+        return back(m)
 
     @app.get("/jobs/{rowid}/edit", response_class=HTMLResponse)
     def edit_page(rowid: int):

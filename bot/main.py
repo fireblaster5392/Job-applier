@@ -14,7 +14,7 @@ import os
 import httpx
 
 from outreach.mailer import SmtpMailer
-from outreach.store import send_email_message, skip_message
+from outreach.store import mark_linkedin_sent, send_email_message, skip_message
 from profile_mcp.profile import Profile
 from tailor.claude import DEFAULT_MODEL
 from tailor.pipeline import tailor_job
@@ -66,6 +66,10 @@ class Bot:
             await self.call("answerCallbackQuery", callback_query_id=cq["id"])
             return
         action, _, raw_id = (cq.get("data") or "").partition(":")
+        if action == "lisent" and raw_id.isdigit():
+            mark_linkedin_sent(self.store, int(raw_id))
+            await self.ack(cq, "✅ Marked sent")
+            return
         if action in ("email", "noemail") and raw_id.isdigit():
             await self.on_email(cq, action, int(raw_id))
             return

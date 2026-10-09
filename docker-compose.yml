@@ -42,11 +42,14 @@ services:
       - ./profile:/app/profile:ro
       - ./config.toml:/app/config.toml:ro
 
-  # mail:       # step 6: Gmail sync + classifier
-  #   build: .
-  #   command: python -m mail.main
-  #   env_file: .env
-  #   volumes: ["./data:/app/data"]
+  mail:       # inbox sync: replies to your outreach + companies' application emails
+    build: .
+    restart: unless-stopped
+    command: python -m mail.main --db /app/data/jobs.db
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+      - ./config.toml:/app/config.toml:ro
 
   # postgres:   # switch DATABASE_URL to Postgres once several services write
   #   image: postgres:17

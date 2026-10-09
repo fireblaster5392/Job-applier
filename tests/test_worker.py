@@ -13,7 +13,7 @@ import anthropic
 import httpx2
 
 PROFILE = Profile.load()
-CFG = {"pipeline": {"score_threshold": 70}}
+CFG = {"pipeline": {"score_threshold": 70}, "networking": {"enabled": False}}
 
 
 def claude_scoring(score):
@@ -81,7 +81,7 @@ class WorkerTests(unittest.TestCase):
         self.assertIsNone(self.store.get_tailored(self.rowid))
 
     def test_weak_fit_alert_when_enabled(self):
-        self.run_worker(claude_scoring(40), cfg={"pipeline": {"score_threshold": 70, "notify_below_threshold": True}})
+        self.run_worker(claude_scoring(40), cfg={"pipeline": {"score_threshold": 70, "notify_below_threshold": True}, "networking": {"enabled": False}})
         self.assertEqual(self.methods(), ["sendMessage"])
 
     def test_claude_failure_falls_back_to_plain_alert(self):

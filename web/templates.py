@@ -26,6 +26,7 @@ BASE = """<!doctype html>
   th { font-size: 12px; text-transform: uppercase; color: var(--muted); }
   .status { font-size: 12px; padding: 2px 8px; border-radius: 999px; border:1px solid var(--line); white-space: nowrap; }
   .s-approved { color: var(--ok); } .s-rejected, .s-failed { color: var(--bad); } .s-tailoring { color: var(--warn); } .s-below_threshold { color: var(--muted); }
+  .a-interview, .a-offer, .a-assessment, .replied { color: var(--ok); } .a-rejected { color: var(--bad); }
   .card { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:16px; }
   .actions { display:flex; gap:8px; flex-wrap:wrap; }
   button { font: inherit; padding: 6px 14px; border-radius: 6px; border:1px solid var(--line); background: var(--card); color: var(--fg); cursor: pointer; }
@@ -37,7 +38,8 @@ BASE = """<!doctype html>
 </style>
 {% block head %}{% endblock %}
 </head><body><main>
-<header><h1><a href="/" style="color:inherit">Job pipeline</a></h1><span class="muted">{{ subtitle or "" }}</span></header>
+<header><h1><a href="/" style="color:inherit">Job pipeline</a></h1><a href="/">Jobs</a><a href="/network">Networking</a>
+<span class="muted">{{ subtitle or "" }}</span></header>
 {% block body %}{% endblock %}
 </main></body></html>"""
 
@@ -51,7 +53,7 @@ INDEX = """{% extends "base" %}
 </div>
 {% if jobs %}
 <table>
-<tr><th>Job</th><th class="hide-sm">Location</th><th class="hide-sm">Found</th><th>Score</th><th>Status</th></tr>
+<tr><th>Job</th><th class="hide-sm">Location</th><th class="hide-sm">Found</th><th>Score</th><th>Status</th><th class="hide-sm">Application</th></tr>
 {% for j in jobs %}
 <tr>
   <td><a href="/jobs/{{ j.rowid }}">{{ j.title }}</a><br><span class="muted">{{ j.company }} · {{ j.ats }}</span></td>
@@ -59,6 +61,7 @@ INDEX = """{% extends "base" %}
   <td class="hide-sm muted">{{ j.first_seen[:16].replace("T", " ") }}</td>
   <td>{{ j.score if j.score is not none and j.score >= 0 else "–" }}</td>
   <td><span class="status s-{{ j.status }}">{{ j.status }}</span></td>
+  <td class="hide-sm">{% if j.app_status %}<span class="status a-{{ j.app_status }}">{{ j.app_status }}</span>{% endif %}</td>
 </tr>
 {% endfor %}
 </table>
@@ -92,6 +95,7 @@ JOB = """{% extends "base" %}
     {% endif %}
     <form method="post" action="/jobs/{{ job.rowid }}/status"><input type="hidden" name="status" value="skipped"><button>Skip</button></form>
   </div>
+  {% if job.app_status %}<p>Application: <span class="status a-{{ job.app_status }}">{{ job.app_status }}</span></p>{% endif %}
   {% if job.status == "approved" %}<p class="muted">Approved. Auto-apply isn't built yet: apply at <a href="{{ job.apply_url or job.url }}" target="_blank">the posting</a> with the files below.</p>{% endif %}
 </div>
 {% if job.status == "tailoring" %}<div class="card muted">Claude is tailoring this application. This page refreshes on its own.</div>{% endif %}
@@ -108,29 +112,16 @@ JOB = """{% extends "base" %}
 <div class="card"><h3 style="margin-top:0">Cover letter <a href="/jobs/{{ job.rowid }}/cover-letter" target="_blank" style="font-size:14px">open to print</a></h3>
 <iframe src="/jobs/{{ job.rowid }}/cover-letter" title="Cover letter" style="height:700px"></iframe></div>
 {% endif %}
+{% if app_emails %}
+<div class="card"><h3 style="margin-top:0">Emails from {{ job.company }}</h3>
+{% for m in app_emails %}<p><span class="status a-{{ {"confirmation": "applied", "interview_request": "interview", "rejection": "rejected"}.get(m.category, m.category) }}">{{ m.category.replace("_", " ") }}</span>
+  {{ m.snippet }} <span class="muted">· {{ m.received_at[:10] }}</span></p>{% endfor %}
+</div>
+{% endif %}
 {% if outreach %}
 <div class="card" id="outreach"><h3 style="margin-top:0">Outreach</h3>
-{% for o in outreach %}
-  <p><b>{{ o.contact.name }}</b>, {{ o.contact.title }}
-  {% if o.contact.linkedin_url %} · <a href="{{ o.contact.linkedin_url }}" target="_blank">LinkedIn</a>{% endif %}
-  {% if o.contact.email %} · {{ o.contact.email }}{% endif %}</p>
-  {% for m in o.messages %}
-  {% if m.channel == "linkedin" %}
-  <div class="muted">LinkedIn note, for you to send yourself:</div><pre>{{ m.body }}</pre>
-  {% else %}
-  <div class="muted">Email · <span class="status">{{ m.status }}</span>{% if m.error %} <span style="color:var(--bad)">{{ m.error }}</span>{% endif %}</div>
-  <pre><b>{{ m.subject }}</b>
-
-{{ m.body }}</pre>
-  {% if m.status in ("draft", "failed") %}
-  <div class="actions">
-    <form method="post" action="/messages/{{ m.id }}/send"><button class="primary">Send email</button></form>
-    <form method="post" action="/messages/{{ m.id }}/skip"><button>Don't send</button></form>
-  </div>
-  {% endif %}
-  {% endif %}
-  {% endfor %}
-{% endfor %}
+{% from "macros" import person %}
+{% for o in outreach %}{{ person(o) }}{% endfor %}
 </div>
 {% endif %}
 {% if t and t.description %}<div class="card"><h3 style="margin-top:0">Job description</h3><pre>{{ t.description }}</pre></div>{% endif %}
@@ -161,5 +152,49 @@ EDIT = """{% extends "base" %}
 </form>
 {% endblock %}"""
 
-env = Environment(loader=DictLoader({"base": BASE, "index": INDEX, "job": JOB, "edit": EDIT}), autoescape=True)
+MACROS = """{% macro person(o) %}
+<div style="border-top:1px solid var(--line); padding-top:8px; margin-top:8px">
+  <p style="margin:0"><b>{{ o.contact.name }}</b>, {{ o.contact.title }}{% if o.contact.company and not o.contact.job_rowid %} · {{ o.contact.company }}{% endif %}
+  {% if o.contact.linkedin_url %} · <a href="{{ o.contact.linkedin_url }}" target="_blank">LinkedIn</a>{% endif %}
+  {% if o.contact.email %} · {{ o.contact.email }}{% endif %}</p>
+  {% for m in o.messages %}
+  <div class="muted" style="margin-top:6px">{{ "Follow-up " if m.is_followup }}{{ "LinkedIn note (you send it)" if m.channel == "linkedin" else "Email" }}
+    · <span class="status {{ m.status }}">{{ m.status }}</span>{% if m.sent_at %} {{ m.sent_at[:10] }}{% endif %}
+    {% if m.error %}<span style="color:var(--bad)">{{ m.error }}</span>{% endif %}</div>
+  <pre>{% if m.subject %}<b>{{ m.subject }}</b>
+
+{% endif %}{{ m.body }}</pre>
+  <div class="actions">
+  {% if m.channel == "email" and m.status in ("draft", "failed") %}
+    <form method="post" action="/messages/{{ m.id }}/send"><button class="primary">Send email</button></form>
+    <form method="post" action="/messages/{{ m.id }}/skip"><button>Don't send</button></form>
+  {% elif m.channel == "linkedin" and m.status == "draft" %}
+    <form method="post" action="/messages/{{ m.id }}/linkedin-sent"><button>I sent it</button></form>
+  {% endif %}
+  {% if m.channel == "linkedin" and m.status == "sent" %}
+    <form method="post" action="/messages/{{ m.id }}/replied"><button>They replied</button></form>
+  {% endif %}
+  </div>
+  {% endfor %}
+  {% for r in o.replies %}
+  <div style="margin-top:6px"><span class="status replied">reply</span> <b>{{ r.subject }}</b> <span class="muted">· {{ r.received_at[:10] }}</span>
+  <pre>{{ r.snippet }}</pre></div>
+  {% endfor %}
+</div>
+{% endmacro %}"""
+
+NETWORK = """{% extends "base" %}
+{% block title %}Networking{% endblock %}
+{% block body %}
+{% from "macros" import person %}
+<div class="chips">{% for s in ["draft", "sent", "replied", "skipped"] %}<span class="chip">{{ s }}<b>{{ counts.get(s, 0) }}</b></span>{% endfor %}</div>
+{% if people %}
+<div class="card">{% for o in people %}{{ person(o) }}{% endfor %}</div>
+{% else %}
+<div class="card muted">No networking contacts yet. The daily batch runs each morning once BRAVE_API_KEY or APOLLO_API_KEY is set.</div>
+{% endif %}
+{% endblock %}"""
+
+env = Environment(loader=DictLoader({"base": BASE, "index": INDEX, "job": JOB, "edit": EDIT, "macros": MACROS,
+                                     "network": NETWORK}), autoescape=True)
 env.filters["fromjson"] = json.loads
