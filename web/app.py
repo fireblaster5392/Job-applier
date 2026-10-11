@@ -8,6 +8,7 @@ import functools
 import logging
 import os
 import threading
+from datetime import datetime, timedelta, timezone
 
 from fastapi import BackgroundTasks, FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -19,6 +20,7 @@ from outreach.store import (get_message, mark_linkedin_sent, mark_replied, netwo
                             send_email_message, skip_message)
 from prep.sheet import DEFAULT_PREP_MODEL, build_prep, get_prep, prep_html
 from profile_mcp.profile import Profile
+from review import weekly
 from tailor.claude import DEFAULT_MODEL
 from tailor.pipeline import tailor_job
 from tailor.provider import load_provider
@@ -36,7 +38,7 @@ SETTABLE = {"approved", "rejected", "skipped", "discovered"}
 
 def create_app(db_path: str, profile_loader=Profile.load, tailor=tailor_job,
                model: str = DEFAULT_MODEL, mailer=None, max_emails_per_day: int = 10,
-               prep_model: str = DEFAULT_PREP_MODEL) -> FastAPI:
+               prep_model: str = DEFAULT_PREP_MODEL, cfg: dict | None = None) -> FastAPI:
     app = FastAPI(title="Job pipeline")
     store = JobStore(db_path)
     lock = threading.Lock()  # request handlers share one sqlite connection
@@ -109,6 +111,14 @@ def create_app(db_path: str, profile_loader=Profile.load, tailor=tailor_job,
             counts[p["state"]] = counts.get(p["state"], 0) + 1
         return env.get_template("network").render(people=people, counts=counts,
                                                   subtitle=f"{counts.get('replied', 0)} replied")
+
+    @app.get("/review", response_class=HTMLResponse)
+    def review_page():
+        until = datetime.now(timezone.utc)
+        with lock:
+            stats = weekly.compute(store, until - timedelta(days=7), until)
+        return env.get_template("review").render(s=stats, tips=weekly.suggestions(stats, cfg or {}),
+                                                 subtitle=f"{stats['since']} to {stats['until']}")
 
     def back(m) -> RedirectResponse:
         return RedirectResponse(f"/jobs/{m['job_rowid']}#outreach" if m["job_rowid"] else "/network", status_code=303)
@@ -251,4 +261,4 @@ def main_app() -> FastAPI:
                       profile_loader=provider.profile, tailor=functools.partial(tailor_job, provider=provider),
                       model=cfg.get("tailor", {}).get("model", DEFAULT_MODEL),
                       max_emails_per_day=cfg.get("outreach", {}).get("max_emails_per_day", 10),
-                      prep_model=cfg.get("prep", {}).get("model", DEFAULT_PREP_MODEL))
+                      prep_model=cfg.get("prep", {}).get("model", DEFAULT_PREP_MODEL), cfg=cfg)

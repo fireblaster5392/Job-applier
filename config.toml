@@ -98,6 +98,14 @@ enabled = true
 model = "claude-opus-5-5"     # about $0.10-0.20 a sheet
 output_dir = "data/prep"
 
+[review]
+# Weekly review on Telegram (and any time at /review on the dashboard): what you applied to, what
+# got responses, by source, fit score, role and contact type, with suggested setting changes.
+enabled = true
+weekday = 6                   # 0 = Monday ... 6 = Sunday
+hour = 18                     # local time
+timezone = "America/Edmonton"
+
 [companies], startups first
 
 [mail]

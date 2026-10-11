@@ -39,7 +39,7 @@ BASE = """<!doctype html>
 </style>
 {% block head %}{% endblock %}
 </head><body><main>
-<header><h1><a href="/" style="color:inherit">Job pipeline</a></h1><a href="/">Jobs</a><a href="/network">Networking</a>
+<header><h1><a href="/" style="color:inherit">Job pipeline</a></h1><a href="/">Jobs</a><a href="/network">Networking</a><a href="/review">Review</a>
 <span class="muted">{{ subtitle or "" }}</span></header>
 {% block body %}{% endblock %}
 </main></body></html>"""
@@ -217,6 +217,37 @@ NETWORK = """{% extends "base" %}
 {% endif %}
 {% endblock %}"""
 
+REVIEW = """{% extends "base" %}
+{% block title %}Weekly review{% endblock %}
+{% block body %}
+{% set w = s.week %}
+<div class="chips">
+  <span class="chip">found<b>{{ w.found }}</b></span><span class="chip">new matches<b>{{ w.matched }}</b></span>
+  <span class="chip">tailored<b>{{ w.tailored }}</b></span><span class="chip">applied<b>{{ w.submitted }}</b></span>
+  <span class="chip">came back to you<b>{{ w.needs_you }}</b></span><span class="chip">emails sent<b>{{ w.emails_sent }}</b></span>
+  <span class="chip">replies<b>{{ w.replies }}</b></span>
+  <span class="chip">interviews<b>{{ w.responses.get("interview_request", 0) }}</b></span>
+</div>
+<div class="card"><h3>Suggestions</h3>
+{% if tips %}<ul>{% for t in tips %}<li>{{ t }}</li>{% endfor %}</ul>
+{% else %}<p class="muted">Nothing to change yet. Suggestions appear once there are at least 8 applications or emails in a group.</p>{% endif %}
+</div>
+{% for title, rows in [("By source", s.by_source), ("By fit score", s.by_band), ("By role", s.by_role)] %}
+<div class="card"><h3>{{ title }} (all time)</h3>
+{% if rows %}<table><tr><th></th><th>Applied</th><th>Responses</th><th>Rejected</th></tr>
+{% for k, v in rows.items() %}<tr><td>{{ k }}</td><td>{{ v.applied }}</td><td>{{ v.positive }}</td><td>{{ v.rejected }}</td></tr>{% endfor %}
+</table>{% else %}<p class="muted">No applications yet.</p>{% endif %}</div>
+{% endfor %}
+<div class="card"><h3>Outreach (all time)</h3>
+<table><tr><th></th><th>Sent</th><th>Replied</th></tr>
+{% for k, v in s.outreach.items() %}<tr><td>Email to {{ k }}</td><td>{{ v.sent }}</td><td>{{ v.replied }}</td></tr>{% endfor %}
+<tr><td>LinkedIn notes</td><td>{{ s.linkedin.sent }}</td><td>{{ s.linkedin.replied }}</td></tr></table></div>
+{% if s.stuck_reasons %}<div class="card"><h3>Why applications came back to you</h3><ul>
+{% for k, n in s.stuck_reasons.items() %}<li>{{ k }} ({{ n }})</li>{% endfor %}</ul></div>{% endif %}
+{% if s.broken_boards %}<div class="card"><h3>Failing company boards</h3><ul>
+{% for b in s.broken_boards %}<li>{{ b }}</li>{% endfor %}</ul></div>{% endif %}
+{% endblock %}"""
+
 env = Environment(loader=DictLoader({"base": BASE, "index": INDEX, "job": JOB, "edit": EDIT, "macros": MACROS,
-                                     "network": NETWORK}), autoescape=True)
+                                     "network": NETWORK, "review": REVIEW}), autoescape=True)
 env.filters["fromjson"] = json.loads

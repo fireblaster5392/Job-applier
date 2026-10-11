@@ -28,6 +28,8 @@ from outreach.telegram import send_contact_drafts
 from prep.sheet import DEFAULT_PREP_MODEL, build_prep, jobs_needing_prep, prep_html
 from profile_mcp.profile import Profile
 from tailor.claude import DEFAULT_MODEL
+from review.weekly import (compute as review_compute, due as review_due, format_telegram as review_text,
+                           mark_sent as review_mark_sent, suggestions as review_tips, week_window as review_window)
 from tailor.pipeline import tailor_job
 from tailor.provider import load_provider
 from tailor.render import cover_letter_html, resume_html
@@ -84,11 +86,24 @@ class Worker:
         if self.networking_on and networking_due(self.store, self.cfg):
             await self.networking()
         stats["followups"] = await followups(self.store, self.notifier, self.cfg, self.profile_loader())
+        if review_due(self.store, self.cfg):
+            await self.weekly_review()
         stats["prep"] = 0
         if self.prep_on:
             for row in jobs_needing_prep(self.store):
                 stats["prep"] += await self.prep(row)
         return stats
+
+    async def weekly_review(self) -> None:
+        from datetime import datetime, timezone
+        from zoneinfo import ZoneInfo
+        tz = ZoneInfo(self.cfg.get("review", {}).get("timezone",
+                                                      self.cfg.get("networking", {}).get("timezone", "America/Edmonton")))
+        since, until = review_window(datetime.now(timezone.utc), tz)
+        stats = review_compute(self.store, since, until)
+        buttons = [[{"text": "Open review", "url": f"{self.dashboard_url}/review"}]] if self.dashboard_url else None
+        if await self.notifier.send_text(review_text(stats, review_tips(stats, self.cfg)), buttons):
+            review_mark_sent(self.store, self.cfg)
 
     async def prep(self, row) -> int:
         """Draft an interview prep sheet when a job's emails say interview. Gives up after 3 failures."""
