@@ -15,6 +15,23 @@ locations = ["united states", "usa", "new york", "san francisco", "seattle", "re
 # Remote jobs match even if their location isn't in the list above.
 allow_remote = true
 
+[discovery]
+# Job-board search through JobSpy (Indeed, Glassdoor, LinkedIn public job search), on top of the
+# company boards below. Runs as the `discover` service. Logged out, no proxies, gentle intervals;
+# a site that blocks is backed off for up to 6 hours. Remove "linkedin" from sites if you'd rather
+# not touch LinkedIn at all (their terms don't allow automated access, even logged out).
+enabled = true
+sites = ["indeed", "glassdoor", "linkedin"]
+interval_minutes = 30        # per search, per site
+hours_old = 24               # only postings from the last day
+results_per_site = 25
+country_indeed = "usa"       # Indeed/Glassdoor country: usa, canada, uk, ...
+searches = [
+  {term = "software engineer new grad", location = "United States"},
+  {term = "backend engineer", location = "New York, NY"},
+  {term = "software engineer", remote = true},
+]
+
 [pipeline]
 # "auto": every matching job gets a quick fit score; jobs at or above score_threshold are
 #         tailored automatically and sent to Telegram once, ready to approve.

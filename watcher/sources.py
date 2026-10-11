@@ -137,4 +137,6 @@ def job_description(job: Job, client: httpx.Client | None = None) -> str:
         finally:
             if own:
                 client.close()
+    if raw.get("source") == "jobspy":   # Indeed, Glassdoor, LinkedIn: JobSpy returns it as markdown
+        return raw.get("description", "")
     return ""

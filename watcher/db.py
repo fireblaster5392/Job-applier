@@ -1,7 +1,8 @@
 """SQLite job store. Plain SQL with portable types so it moves to Postgres later."""
 import json
+import re
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from .models import Job
 
@@ -122,6 +123,10 @@ CREATE INDEX IF NOT EXISTS jobs_status ON jobs (status);
 """
 
 
+def _norm(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (text or "").lower())
+
+
 def now() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
@@ -235,6 +240,44 @@ class JobStore:
         return [row_to_job(r) for r in rows]
 
     # --- used by the worker, the bot, the dashboard and tailoring -------------------
+
+    def add_found_jobs(self, source: str, search: str, jobs: list[Job], is_match,
+                       dedupe_days: int = 30) -> tuple[list[Job], int]:
+        """Store jobs from a search (JobSpy). Returns (new jobs, duplicates skipped).
+
+        Like sync_board, a search's first run is stored silently as backlog. Unlike a board, a search
+        result disappearing doesn't mean the job closed, so nothing is marked closed. A job whose
+        company and title were already seen from any source in the last dedupe_days is skipped.
+        """
+        ts = now()
+        seeded = self.is_seeded(source, search)
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=dedupe_days)).isoformat(timespec="seconds")
+        seen = {(_norm(r["company"]), _norm(r["title"])) for r in self.conn.execute(
+            "SELECT company, title FROM jobs WHERE first_seen >= ?", (cutoff,))}
+        new, dupes = [], 0
+        for job in jobs:
+            if self.conn.execute("SELECT 1 FROM jobs WHERE ats=? AND company=? AND job_id=?", job.key).fetchone():
+                self.conn.execute("UPDATE jobs SET last_seen=? WHERE ats=? AND company=? AND job_id=?", (ts, *job.key))
+                continue
+            sig = (_norm(job.company), _norm(job.title))
+            if sig in seen:
+                dupes += 1
+                continue
+            seen.add(sig)
+            self.conn.execute(
+                """INSERT INTO jobs (ats, company, job_id, title, location, department, remote,
+                                     url, apply_url, posted_at, first_seen, last_seen, matched, is_new, raw)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (job.ats, job.company, job.job_id, job.title, job.location, job.department, int(job.remote),
+                 job.url, job.apply_url, job.posted_at, ts, ts, int(is_match(job)), int(seeded), json.dumps(job.raw)))
+            if seeded:
+                new.append(job)
+        self.conn.execute(
+            """INSERT INTO boards (ats, company, seeded_at, last_ok_at) VALUES (?, ?, ?, ?)
+               ON CONFLICT (ats, company) DO UPDATE SET seeded_at=COALESCE(boards.seeded_at, excluded.seeded_at),
+                 last_ok_at=excluded.last_ok_at, last_error=NULL""", (source, search, ts, ts))
+        self.conn.commit()
+        return new, dupes
 
     def get_state(self, key: str) -> str | None:
         row = self.conn.execute("SELECT value FROM state WHERE key=?", (key,)).fetchone()

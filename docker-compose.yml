@@ -9,6 +9,14 @@ services:
       - ./data:/app/data
       - ./config.toml:/app/config.toml:ro
 
+  discover:   # Indeed / Glassdoor / LinkedIn search via JobSpy, every 30 min per search
+    build: .
+    restart: unless-stopped
+    command: python -m watcher.discover --db /app/data/jobs.db
+    volumes:
+      - ./data:/app/data
+      - ./config.toml:/app/config.toml:ro
+
   worker:     # scores new matches, tailors the good fits, sends them to Telegram
     build: .
     restart: unless-stopped
