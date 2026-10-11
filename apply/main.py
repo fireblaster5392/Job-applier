@@ -8,6 +8,7 @@ hours, all in [apply] in config.toml. CAPTCHAs are never solved: those come back
 """
 import argparse
 import asyncio
+import functools
 import html
 import json
 import logging
@@ -26,6 +27,7 @@ from watcher.db import JobStore, row_to_job
 from watcher.main import load_config
 from watcher.notify import Notifier
 
+from .agent import DEFAULT_AGENT_MODEL
 from .runner import apply_job, get_application
 
 log = logging.getLogger("apply")
@@ -44,6 +46,10 @@ class ApplyQueue:
         self.model = cfg.get("tailor", {}).get("model", DEFAULT_MODEL)
         self.store, self.notifier, self.profile_loader = store, notifier, profile_loader
         self.out_root, self.dashboard_url, self.claude = out_root, dashboard_url.rstrip("/"), claude
+        if apply_fn is apply_job:
+            # Browser-agent fallback for Workday and other portals; off unless [apply] agent = true.
+            apply_fn = functools.partial(apply_job, agent_model=a.get("agent_model", DEFAULT_AGENT_MODEL)
+                                         if a.get("agent", False) else None)
         self.apply_fn, self.rng = apply_fn, rng
 
     def submitted_today(self, at: datetime) -> int:

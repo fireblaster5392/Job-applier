@@ -63,6 +63,12 @@ max_gap_minutes = 12
 active_hours = [8, 22]       # local time
 timezone = "America/Edmonton"
 dry_run = false              # true: fill forms but never click Submit
+# Browser agent for forms the generic filler can't do (Workday, iCIMS, Taleo, SmartRecruiters,
+# company portals). Claude drives the browser page by page, stops at the final Submit for your
+# review, and submits only after your Submit tap. Roughly $0.30-1.50 per application on Sonnet.
+# For sites that need an account, set APPLY_LOGIN_EMAIL / APPLY_LOGIN_PASSWORD in .env.
+agent = true
+agent_model = "claude-sonnet-5-5"
 
 [outreach]
 # After you approve a job, find people there (Brave Search for LinkedIn profiles, Apollo for

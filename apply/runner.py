@@ -6,10 +6,15 @@ Outcomes:
   needs_you     a CAPTCHA, or a required question nobody can answer (legal, salary, unknown);
                 the user finishes it themselves with the attached PDFs
   failed        something broke (page didn't load, submit didn't confirm)
+
+Greenhouse, Lever and Ashby forms use the generic label-driven filler. Anything else (Workday,
+iCIMS, company portals, or a form the filler can't read) goes to the browser agent in agent.py
+when [apply] agent is on, and comes back to you otherwise.
 """
 import json
 import logging
 from pathlib import Path
+from urllib.parse import urlparse
 
 from playwright.sync_api import sync_playwright
 
@@ -19,12 +24,22 @@ from watcher.db import JobStore, now, row_to_job
 from watcher.sources import job_description
 
 from . import browser as br
+from .agent import run_agent
 from .fields import CLAUDE_OK, Field, answer_known, classify
 from .llm import answer_questions
 from .pdf import render_pdfs
 
 log = logging.getLogger(__name__)
 FREE_TEXT = {"textarea", "text"}
+# Portals the generic filler shouldn't try (accounts, multi-page wizards): straight to the agent.
+AGENT_HOSTS = ("myworkdayjobs.com", "myworkdaysite.com", "workday.com", "icims.com", "taleo.net",
+               "smartrecruiters.com", "successfactors.com", "successfactors.eu", "jobvite.com",
+               "oraclecloud.com", "brassring.com", "indeed.com", "linkedin.com", "glassdoor.com")
+
+
+def agent_host(url: str) -> bool:
+    host = urlparse(url).hostname or ""
+    return any(host == h or host.endswith("." + h) for h in AGENT_HOSTS)
 
 
 def _key(f: Field) -> str:
@@ -33,7 +48,9 @@ def _key(f: Field) -> str:
 
 def apply_job(store: JobStore, rowid: int, profile: Profile, *, model: str, out_root: Path,
               claude=None, approved_answers: dict[str, str] | None = None, dry_run: bool = False,
-              playwright_factory=sync_playwright, http_client=None) -> dict:
+              playwright_factory=sync_playwright, http_client=None, agent_model: str | None = None,
+              agent_fn=run_agent) -> dict:
+    """agent_model: model for the browser-agent fallback; None turns the fallback off."""
     row = store.get_job(rowid)
     rec = store.get_tailored(rowid)
     if row is None or rec is None:
@@ -53,7 +70,21 @@ def apply_job(store: JobStore, rowid: int, profile: Profile, *, model: str, out_
                 page.screenshot(path=screenshot, full_page=True)
                 return _save(store, rowid, "needs_you", [], ["The form has a CAPTCHA."], screenshot, files)
 
-            fields = [classify(f) for f in br.extract_fields(page)]
+            fields = [] if agent_host(page.url) else [classify(f) for f in br.extract_fields(page)]
+            if not fields and agent_model:
+                approved = None if approved_answers is None else [
+                    {"label": k.split("|", 1)[-1], "answer": v} for k, v in approved_answers.items()]
+                if dry_run:
+                    approved = None     # a dry run never submits
+                r = agent_fn(page, job={"title": job.title, "company": job.company}, profile=profile, app=app,
+                             files=files, model=agent_model, client=claude, approved=approved)
+                page.screenshot(path=screenshot, full_page=True)
+                return _save(store, rowid, r["outcome"], r["answers"], r["reasons"], screenshot, files)
+            if not fields and agent_host(page.url):
+                page.screenshot(path=screenshot, full_page=True)
+                return _save(store, rowid, "needs_you", [], [
+                    f"{urlparse(page.url).hostname} needs the browser agent, which is off ([apply] agent)."],
+                    screenshot, files)
             if not fields:
                 page.screenshot(path=screenshot, full_page=True)
                 return _save(store, rowid, "failed", [], ["Couldn't find the application form."], screenshot, files)
