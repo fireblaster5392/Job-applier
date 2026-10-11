@@ -89,6 +89,11 @@ JOB = """{% extends "base" %}
     {% if job.status != "tailoring" %}
     <form method="post" action="/jobs/{{ job.rowid }}/tailor"><button {{ 'class=primary' if not t }}>{{ "Re-tailor" if t else "Tailor resume" }}</button></form>
     {% endif %}
+    {% if prep %}<a href="/jobs/{{ job.rowid }}/prep" target="_blank"><button class="primary">Interview prep</button></a>{% endif %}
+    {% if prep_running %}<button disabled>Drafting prep sheet…</button>
+    {% elif job.app_status in ("interview", "assessment") or prep %}
+    <form method="post" action="/jobs/{{ job.rowid }}/prep"><button>{{ "Redo prep sheet" if prep else "Draft interview prep" }}</button></form>
+    {% endif %}
     {% if t %}
     <form method="post" action="/jobs/{{ job.rowid }}/status"><input type="hidden" name="status" value="approved"><button class="primary">Approve</button></form>
     <a href="/jobs/{{ job.rowid }}/edit"><button>Edit</button></a>

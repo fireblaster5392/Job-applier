@@ -113,6 +113,12 @@ CREATE TABLE IF NOT EXISTS applications (
     submitted_at TEXT
 );
 
+CREATE TABLE IF NOT EXISTS prep_sheets (
+    job_rowid    INTEGER PRIMARY KEY,   -- interview prep sheet for this job (prep/sheet.py)
+    data         TEXT NOT NULL,         -- PrepSheet JSON
+    model        TEXT,
+    created_at   TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS state (
     key          TEXT PRIMARY KEY,
     value        TEXT

@@ -5,6 +5,7 @@
 Keep it private (Tailscale or Cloudflare Access); it has no login of its own.
 """
 import functools
+import logging
 import os
 import threading
 
@@ -16,6 +17,7 @@ from apply.status import mark_submitted_by_user
 from outreach.mailer import SmtpMailer
 from outreach.store import (get_message, mark_linkedin_sent, mark_replied, network_contacts, outreach_for_job,
                             send_email_message, skip_message)
+from prep.sheet import DEFAULT_PREP_MODEL, build_prep, get_prep, prep_html
 from profile_mcp.profile import Profile
 from tailor.claude import DEFAULT_MODEL
 from tailor.pipeline import tailor_job
@@ -33,7 +35,8 @@ SETTABLE = {"approved", "rejected", "skipped", "discovered"}
 
 
 def create_app(db_path: str, profile_loader=Profile.load, tailor=tailor_job,
-               model: str = DEFAULT_MODEL, mailer=None, max_emails_per_day: int = 10) -> FastAPI:
+               model: str = DEFAULT_MODEL, mailer=None, max_emails_per_day: int = 10,
+               prep_model: str = DEFAULT_PREP_MODEL) -> FastAPI:
     app = FastAPI(title="Job pipeline")
     store = JobStore(db_path)
     lock = threading.Lock()  # request handlers share one sqlite connection
@@ -70,8 +73,10 @@ def create_app(db_path: str, profile_loader=Profile.load, tailor=tailor_job,
             app_emails = store.conn.execute(
                 "SELECT * FROM inbox WHERE job_rowid=? AND kind='application' ORDER BY received_at", (rowid,)).fetchall()
             application = get_application(store, rowid)
+            prep = get_prep(store, rowid)
         return env.get_template("job").render(job=job, t=t, outreach=outreach, app_emails=app_emails,
-                                              application=application)
+                                              application=application, prep=prep,
+                                              prep_running=rowid in prep_running)
 
     @app.get("/jobs/{rowid}/screenshot")
     def screenshot(rowid: int):
@@ -200,6 +205,32 @@ def create_app(db_path: str, profile_loader=Profile.load, tailor=tailor_job,
             background.add_task(run_tailor, rowid)
         return RedirectResponse(f"/jobs/{rowid}", status_code=303)
 
+    prep_running: set[int] = set()
+
+    def run_prep(rowid: int):
+        try:
+            build_prep(JobStore(db_path), rowid, profile_loader(), model=prep_model)
+        except Exception:  # noqa: BLE001 - shown as "not ready" on the page; logged by the caller's logger
+            logging.getLogger(__name__).exception("prep sheet failed for job %s", rowid)
+        finally:
+            prep_running.discard(rowid)
+
+    @app.post("/jobs/{rowid}/prep")
+    def start_prep(rowid: int, background: BackgroundTasks):
+        job_or_404(rowid)
+        if rowid not in prep_running:
+            prep_running.add(rowid)
+            background.add_task(run_prep, rowid)
+        return RedirectResponse(f"/jobs/{rowid}", status_code=303)
+
+    @app.get("/jobs/{rowid}/prep", response_class=HTMLResponse)
+    def prep_page(rowid: int):
+        job_or_404(rowid)
+        with lock:
+            if get_prep(store, rowid) is None:
+                raise HTTPException(404, "No prep sheet yet")
+            return prep_html(store, rowid, profile_loader())
+
     @app.post("/jobs/{rowid}/status")
     def set_status(rowid: int, status: str = Form(...)):
         job_or_404(rowid)
@@ -219,4 +250,5 @@ def main_app() -> FastAPI:
     return create_app(os.environ.get("DB_PATH", "data/jobs.db"),
                       profile_loader=provider.profile, tailor=functools.partial(tailor_job, provider=provider),
                       model=cfg.get("tailor", {}).get("model", DEFAULT_MODEL),
-                      max_emails_per_day=cfg.get("outreach", {}).get("max_emails_per_day", 10))
+                      max_emails_per_day=cfg.get("outreach", {}).get("max_emails_per_day", 10),
+                      prep_model=cfg.get("prep", {}).get("model", DEFAULT_PREP_MODEL))

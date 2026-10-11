@@ -16,6 +16,7 @@ import html
 import logging
 import os
 import re
+from pathlib import Path
 
 import httpx
 
@@ -24,6 +25,7 @@ from outreach.draft import draft_messages
 from outreach.finder import find_contacts
 from outreach.store import jobs_needing_outreach, save_outreach
 from outreach.telegram import send_contact_drafts
+from prep.sheet import DEFAULT_PREP_MODEL, build_prep, jobs_needing_prep, prep_html
 from profile_mcp.profile import Profile
 from tailor.claude import DEFAULT_MODEL
 from tailor.pipeline import tailor_job
@@ -66,6 +68,9 @@ class Worker:
         self.find_contacts = find_contacts
         self.cfg = cfg
         self.networking_on = cfg.get("networking", {}).get("enabled", True)
+        pr = cfg.get("prep", {})
+        self.prep_on, self.prep_model = pr.get("enabled", True), pr.get("model", DEFAULT_PREP_MODEL)
+        self.prep_dir = Path(pr.get("output_dir", "data/prep"))
 
     async def run_once(self) -> dict:
         stats = {"tailored": 0, "below": 0, "fallback": 0, "resent": 0, "outreach": 0}
@@ -79,7 +84,34 @@ class Worker:
         if self.networking_on and networking_due(self.store, self.cfg):
             await self.networking()
         stats["followups"] = await followups(self.store, self.notifier, self.cfg, self.profile_loader())
+        stats["prep"] = 0
+        if self.prep_on:
+            for row in jobs_needing_prep(self.store):
+                stats["prep"] += await self.prep(row)
         return stats
+
+    async def prep(self, row) -> int:
+        """Draft an interview prep sheet when a job's emails say interview. Gives up after 3 failures."""
+        rowid, key = row["rowid"], f"prep_failures:{row['rowid']}"
+        failures = int(self.store.get_state(key) or 0)
+        if failures >= 3:
+            return 0
+        try:
+            await asyncio.to_thread(build_prep, self.store, rowid, self.profile_loader(), model=self.prep_model,
+                                    client=self.claude, http_client=self.http_client)
+        except Exception as exc:  # noqa: BLE001 - retried next pass, then left for the dashboard button
+            log.warning("prep sheet failed for job %s: %s", rowid, exc)
+            self.store.set_state(key, str(failures + 1))
+            return 0
+        path = self.prep_dir / f"prep-{_slug(row['company'])}-{rowid}.html"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(prep_html(self.store, rowid, self.profile_loader()))
+        e = html.escape
+        buttons = [[{"text": "Open prep sheet", "url": f"{self.dashboard_url}/jobs/{rowid}/prep"}]] if self.dashboard_url else None
+        await self.notifier.send_text(f"🎯 Interview prep for <b>{e(row['title'])}</b> at {e(row['company'])} is ready.",
+                                      buttons)
+        await self.notifier.send_file(str(path))
+        return 1
 
     async def networking(self) -> None:
         from zoneinfo import ZoneInfo
