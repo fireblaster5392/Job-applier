@@ -6,7 +6,8 @@ and the step-by-step build order; read it first.
 ## How it works
 
 1. **Watcher** polls every company's job board every 60 seconds and keeps jobs whose title and
-   location match your filters.
+   location match your filters. **Discover** searches Indeed, Glassdoor and LinkedIn's public job
+   search through JobSpy every 30 minutes per search, without duplicating jobs already found.
 2. **Worker** gives each new match a quick fit score (Haiku, about $0.0005 a job).
    - **Score ≥ threshold** (default 70): Claude tailors your resume and cover letter right away,
      and Telegram gets one message with both files, the score and **Approve / Edit / Skip**.
@@ -51,17 +52,20 @@ Set `[pipeline] mode = "manual"` in `config.toml` to get every match in Telegram
 
 | Folder | What it is | Status |
 |---|---|---|
-| `watcher/` | 60-second poller for Greenhouse, Lever, Ashby + Telegram alerts | Built |
+| `watcher/` | 60-second poller for Greenhouse, Lever, Ashby; JobSpy discovery (Indeed, Glassdoor, LinkedIn) | Built |
 | `profile/` | Seed files: me, experience, projects/, skills, format rules, answers ([what to fill in](profile/README.md)) | **Placeholder: replace with yours** |
 | `profile_mcp/` | Profile loading/search + MCP server for Claude Code / Desktop | Built |
 | `tailor/` | Fit scoring, Claude tailoring, guardrails, resume + cover letter rendering | Built |
 | `worker/` | Auto pipeline: score, tailor good fits, send to Telegram | Built |
 | `bot/` | Telegram button handler | Built |
 | `web/` | Approval queue + dashboard (FastAPI) | Built |
-| `apply/` | Apply queue: form filling, PDFs, pacing, hand-offs | Built (needs live testing) |
+| `apply/` | Apply queue: form filling, PDFs, pacing, hand-offs; browser agent for Workday-style portals | Built (needs live testing) |
 | `outreach/` | Contact finding, message drafts, email sending on your tap | Built |
 | `mail/` | Inbox sync: replies + application emails | Built |
 | `networking/` | Daily networking batch + follow-ups | Built |
+| `prep/` | Interview prep sheets when an interview email lands | Built |
+| `review/` | Weekly review: what's working, suggested setting changes | Built |
+| `deploy/` | Server setup, update and backup scripts ([docs/deploy.md](docs/deploy.md)) | Built |
 | `data/` | SQLite database (git-ignored) | |
 
 Secrets go in `.env` (copy `.env.example`); never commit it.
@@ -74,7 +78,8 @@ pip install -r requirements.txt
 cp .env.example .env            # fill in Telegram + ANTHROPIC_API_KEY
 set -a; source .env; set +a
 
-python -m watcher.main --db data/jobs.db                          # finds jobs
+python -m watcher.main --db data/jobs.db                          # finds jobs on company boards
+python -m watcher.discover --db data/jobs.db                      # finds jobs on Indeed / Glassdoor / LinkedIn
 python -m worker.main --db data/jobs.db                           # scores + tailors + sends
 python -m bot.main --db data/jobs.db                              # handles Telegram buttons
 python -m mail.main --db data/jobs.db                             # reads replies + application emails
@@ -82,7 +87,8 @@ python -m apply.main --db data/jobs.db --dry-run                  # apply queue 
 DB_PATH=data/jobs.db uvicorn --factory web.app:main_app --port 8000   # dashboard at localhost:8000
 ```
 
-On a VPS: `docker compose up -d` runs all six.
+On a server: `docker compose up -d --build` runs all eight services. Setup from a blank server is
+in [docs/deploy.md](docs/deploy.md).
 
 The apply queue needs Chromium: `pip install playwright && playwright install chromium` locally
 (the Docker image has it).
@@ -156,6 +162,6 @@ python -m unittest -v
 Offline tests (fake job boards, fake Claude and fake Telegram) cover parsing, filters, dedupe,
 tailoring guardrails, rendering, the bot buttons and the dashboard flow.
 
-## Next steps (from architecture/job-automation-architecture.md)
+## Next steps
 
-See [ROADMAP.md](ROADMAP.md): interview prep sheets, then the weekly review.
+See [ROADMAP.md](ROADMAP.md): everything is built; what's left is the live run with your data.

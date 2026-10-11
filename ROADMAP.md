@@ -45,18 +45,21 @@ leaves their hands.
 | 1 | **Job watcher**: Greenhouse, Lever, Ashby APIs every 60 s, dedupe in SQLite | ✅ Built |
 | 2 | **Profile**: seed files (me, experience, project library, skills + keywords, format rules, answers) with a checker; job-search MCP server (stdio locally, HTTP `mcp` service on the VPS) that tailors from them | ✅ Built (placeholder data; user fills the seed) |
 | 3 | **Fit scoring**: Haiku scores every match 0-100 | ✅ Built |
-| 3b | **Tailoring interface**: profile, scoring and tailoring behind one provider; built-in Claude by default, or the user's own MCP tailoring server (`docs/tailoring-server.md`) | ✅ Built (interface); user's server in progress |
+| 3b | **Tailoring interface**: profile, scoring and tailoring behind one provider; built-in by default, or any MCP server that meets `docs/tailoring-server.md` | ✅ Built |
 | 4 | **Tailor first, approve once**: score ≥ threshold → tailored resume + cover letter → one Telegram message with Approve / Edit / Skip; lower scores listed on the dashboard | ✅ Built |
 | 5 | **Dashboard**: pipeline, tailored docs, editor, approval buttons | ✅ Built |
 | 6 | **Auto-apply**: fill Greenhouse / Lever / Ashby forms, upload PDFs, submit on Approve, human pacing and daily cap, CAPTCHAs and essay questions handed to the user | ✅ Built (tested on local form copies; needs a live dry run) |
+| 6b | **Browser agent** for Workday, iCIMS, Taleo, SmartRecruiters and other portals: Claude fills page by page, stops at the final Submit for review, submits on the user's tap; legal answers only from answers.yaml; CAPTCHAs and verification go to the user | ✅ Built (tested on a local Workday-style form; needs a live dry run) |
 | 7 | **Post-apply outreach**: find contacts (Brave LinkedIn search + Apollo), draft notes and emails, email on tap | ✅ Built |
 | 8 | **Inbox tracking**: replies matched to contacts; application emails classified into applied / assessment / interview / rejected / offer | ✅ Built |
 | 9 | **Daily networking**: 5 founders/recruiters a day, 90-day cooldown, tap to send | ✅ Built |
 | 10 | **Follow-ups**: one drafted follow-up after 5 days without a reply | ✅ Built |
-| 11 | **Interview prep sheets**: on an interview email, draft company notes, role summary, likely questions and matching stories | ⏳ Next |
-| 12 | **Weekly review**: response rates by role, company, source and message; tune threshold and targets | ⏳ Later |
-| 13 | **More sources**: Workday, Indeed via JobSpy, HN Who's Hiring | ⏳ Later |
-| 14 | **Deploy**: VPS + Docker Compose + Tailscale, Postgres when needed | ⏳ When the user is ready |
+| 11 | **Interview prep sheets**: on an interview email, draft company notes, role summary, likely questions and matching stories | ✅ Built |
+| 12 | **Weekly review**: response rates by source, fit score, role and contact type; suggested threshold and target changes (Telegram on Sundays + `/review`) | ✅ Built |
+| 13 | **More sources**: Indeed, Glassdoor and LinkedIn job search via JobSpy (`discover` service), deduped against company boards | ✅ Built (live check pending: the build sandbox can't reach those sites) |
+| 13b | **HN Who's Hiring**, Workday job listings as a source | ⏳ Later |
+| 14 | **Deploy**: server setup script, Docker Compose for all 8 services, Tailscale-only access, nightly backups, update script (`docs/deploy.md`) | ✅ Built (needs the user's server; images not built in the sandbox) |
+| 15 | **Live run**: real profile, keys and a server; one dry-run day, then real applications | ⏳ Waiting on the user |
 
 ## Decisions (from the project chat, 2026-10-09)
 
@@ -70,6 +73,10 @@ leaves their hands.
 - **Claude builds the profile/tailoring MCP server; the user supplies the seed data** (their info,
   resume rules, keywords, project library) in `profile/`. A different server can still plug in via
   `tailor/provider.py`; guardrails and `answers.yaml` stay on the pipeline side.
+- **Discovery covers LinkedIn's logged-out job search** (requested 2026-10-11). It never touches
+  the user's account; remove "linkedin" from `[discovery] sites` to stop it.
+- **Workday-style portals go to a browser agent** that stops before Submit; an account is only
+  created or used with the login the user puts in `.env`.
 - **Models**: Haiku for scoring and email classification, Opus for tailoring and drafting
   (switchable to Sonnet in `config.toml` to cut cost).
 
@@ -80,3 +87,4 @@ leaves their hands.
 - Create a Telegram bot token, an Anthropic API key, and optionally Brave / Apollo keys and a
   Gmail app password; put them in `.env`.
 - Install the Claude GitHub App on the repository so the code can be pushed.
+- Rent a server (2 vCPU / 4 GB, Ubuntu 24.04) and follow `docs/deploy.md`.

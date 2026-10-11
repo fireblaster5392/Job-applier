@@ -1,91 +1,69 @@
-# Runs on a small always-on VPS: `docker compose up -d`, logs with `docker compose logs -f watcher`.
-# Services for later steps are commented out until they're built.
+# Runs everything on one small always-on server. Setup: docs/deploy.md.
+#   docker compose up -d --build     start or update
+#   docker compose logs -f worker    follow one service
+#   docker compose ps                what's running
+# The dashboard (8000) and MCP server (8765) listen on 127.0.0.1 only; reach them over Tailscale.
+
+x-app: &app
+  image: job-applier:latest
+  pull_policy: never          # built locally by `up --build`, never pulled
+  restart: unless-stopped
+  env_file: .env
+  volumes:
+    - ./data:/app/data
+    - ./profile:/app/profile:ro
+    - ./config.toml:/app/config.toml:ro
+  logging: &logging
+    driver: json-file
+    options: {max-size: "10m", max-file: "3"}
+
 services:
-  watcher:
+  watcher:    # Greenhouse / Lever / Ashby boards every 60 s
+    <<: *app
     build: .
-    restart: unless-stopped
-    env_file: .env
-    volumes:
-      - ./data:/app/data
-      - ./config.toml:/app/config.toml:ro
+    command: python -m watcher.main --db /app/data/jobs.db
 
   discover:   # Indeed / Glassdoor / LinkedIn search via JobSpy, every 30 min per search
-    build: .
-    restart: unless-stopped
+    <<: *app
     command: python -m watcher.discover --db /app/data/jobs.db
-    volumes:
-      - ./data:/app/data
-      - ./config.toml:/app/config.toml:ro
 
-  worker:     # scores new matches, tailors the good fits, sends them to Telegram
-    build: .
-    restart: unless-stopped
+  worker:     # scores, tailors, outreach, networking, follow-ups, interview prep, weekly review
+    <<: *app
     command: python -m worker.main --db /app/data/jobs.db
-    env_file: .env
-    volumes:
-      - ./data:/app/data
-      - ./profile:/app/profile:ro
-      - ./config.toml:/app/config.toml:ro
 
-  apply:      # submits approved applications at a human pace
+  apply:      # submits approved applications at a human pace (needs a browser, so its own image)
+    <<: *app
+    image: job-applier-apply:latest
     build: {context: ., dockerfile: Dockerfile.apply}
-    restart: unless-stopped
-    env_file: .env
-    volumes:
-      - ./data:/app/data
-      - ./profile:/app/profile:ro
-      - ./config.toml:/app/config.toml:ro
+    command: python -m apply.main --db /app/data/jobs.db
+    shm_size: "1gb"            # Chromium needs more shared memory than Docker's 64 MB default
 
-  web:        # approval queue + dashboard
-    build: .
-    restart: unless-stopped
+  web:        # dashboard: approvals, editor, networking, review
+    <<: *app
     command: uvicorn --factory web.app:main_app --host 0.0.0.0 --port 8000
-    env_file: .env
     environment:
       DB_PATH: /app/data/jobs.db
-    volumes:
-      - ./data:/app/data
-      - ./profile:/app/profile:ro
-      - ./config.toml:/app/config.toml:ro
-    ports: ["127.0.0.1:8000:8000"]   # reach it over Tailscale, not the public internet
+    ports: ["127.0.0.1:8000:8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/', timeout=5)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
 
-  bot:        # Telegram Tailor / Skip / Approve / Reject buttons
-    build: .
-    restart: unless-stopped
+  bot:        # Telegram buttons
+    <<: *app
     command: python -m bot.main --db /app/data/jobs.db
-    env_file: .env
-    volumes:
-      - ./data:/app/data
-      - ./profile:/app/profile:ro
-      - ./config.toml:/app/config.toml:ro
 
   mail:       # inbox sync: replies to your outreach + companies' application emails
-    build: .
-    restart: unless-stopped
+    <<: *app
     command: python -m mail.main --db /app/data/jobs.db
-    env_file: .env
-    volumes:
-      - ./data:/app/data
-      - ./config.toml:/app/config.toml:ro
 
-  mcp:        # job-search MCP server for Claude Code / Desktop: profile, resume rendering, your pipeline
-    build: .
-    restart: unless-stopped
+  mcp:        # job-search MCP server for Claude Code / Desktop
+    <<: *app
+    env_file: []               # needs no secrets
     command: python -m profile_mcp.server --http --host 0.0.0.0 --port 8765
-    environment:                     # no .env: this server needs no secrets
+    environment:
       DB_PATH: /app/data/jobs.db
       RESUME_OUTPUT_DIR: /app/data/output
       MCP_ALLOWED_HOSTS: ${MCP_ALLOWED_HOSTS:-localhost,127.0.0.1}
-    volumes:
-      - ./data:/app/data
-      - ./profile:/app/profile:ro
-    ports: ["127.0.0.1:8765:8765"]   # publish on your tailnet with `tailscale serve`, see README
-
-  # postgres:   # switch DATABASE_URL to Postgres once several services write
-  #   image: postgres:17
-  #   restart: unless-stopped
-  #   environment:
-  #     POSTGRES_USER: jobs
-  #     POSTGRES_DB: jobs
-  #     POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-  #   volumes: ["./data/postgres:/var/lib/postgresql/data"]
+    ports: ["127.0.0.1:8765:8765"]
