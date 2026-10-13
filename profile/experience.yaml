@@ -1,0 +1,47 @@
+# EVERY JOB AND INTERNSHIP, newest first. List more bullets than any one resume needs:
+# tailoring picks the best ones per job and rewrites them for each job's recruiter, keeping your facts.
+# PLACEHOLDER: replace with yours.
+#
+# Per role:
+#   id        short slug, unique across all files (used to prefix nothing; just for you)
+#   tech      tools you used there; added to every bullet's tags for matching
+#   keywords  domains and themes (billing, ml, payments...); also added to bullet tags
+#   metrics   facts with numbers that bullets may quote; a reworded bullet may use a number
+#             only if it is in that bullet or in this list
+#   bullets   id (unique everywhere, never reused), text (one line, true as written), tags
+
+- id: exco
+  company: Example Corp
+  title: Software Engineer
+  location: Calgary, AB
+  start: 2024-05
+  end: present
+  tech: [Python, FastAPI, Spark, PostgreSQL, AWS]
+  keywords: [backend, billing, data engineering]
+  metrics: ["2M requests a day", "3 hours to 25 minutes", "4 services"]
+  bullets:
+    - id: exco-api
+      text: Built a Python/FastAPI service handling 2M requests a day for internal billing.
+      tags: [api]
+    - id: exco-pipeline
+      text: Cut nightly ETL runtime from 3 hours to 25 minutes by moving it to incremental Spark jobs.
+      tags: [etl, performance]
+    - id: exco-oncall
+      text: Led on-call rotation for 4 services and wrote runbooks that halved incident resolution time.
+      tags: [reliability, oncall, leadership]
+
+- id: startup
+  company: Startup Inc
+  title: Software Engineering Intern
+  location: Remote
+  start: 2023-05
+  end: 2023-08
+  tech: [React, TypeScript, Python, pytest]
+  keywords: [frontend, testing, logistics]
+  bullets:
+    - id: st-react
+      text: Shipped a React dashboard used by 300 customers to track shipments in real time.
+      tags: [dashboard]
+    - id: st-tests
+      text: Raised backend test coverage from 40% to 85% with pytest and CI checks.
+      tags: [ci]

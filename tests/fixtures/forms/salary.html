@@ -1,0 +1,6 @@
+<!doctype html><html><body><form>
+<div class="field"><label for="e">Email *</label><input id="e" type="email" required></div>
+<div class="field"><label for="s">What are your salary expectations? *</label><input id="s" required></div>
+<button type="submit">Submit</button></form>
+<script>document.querySelector("form").addEventListener("submit", e => { e.preventDefault(); if (!e.target.checkValidity()) return; document.body.innerHTML = "<h1>Thank you for applying!</h1>"; });</script>
+</body></html>

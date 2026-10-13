@@ -1,0 +1,27 @@
+# HOW YOUR RESUME SHOULD LOOK. Every rule here is applied to every tailored resume.
+# Leave a key out to use the default shown in profile/README.md.
+
+sections: [summary, experience, projects, skills, education]   # order; remove one to hide it
+pages: 1                      # target length; tailoring keeps the content within it
+
+max_bullets_total: 12         # experience + projects together
+max_bullets_per_role: 4
+min_bullets_per_role: 1       # every listed job gets at least this many (if it has them)
+max_projects: 3
+max_bullets_per_project: 2
+max_skills: 14
+group_skills: true            # print skills under your group names, or as one line
+
+always_include: [exco-api]    # bullet ids on every resume
+never_include: []             # bullet ids never used
+
+date_format: "%b %Y"          # May 2024; "%Y-%m" for 2024-05
+font: "Helvetica, Arial, sans-serif"
+font_size: 10.5               # points
+
+# Style notes for wording. Followed by the tailoring; facts and numbers never change.
+bullet_style: Start with a strong past-tense verb, then what you built and the measurable result. One line each.
+summary_style: Two sentences, no buzzwords, mention the job's core stack only if it's in my files.
+cover_letter:
+  paragraphs: 3
+  style: Plain and specific. Name one project that matches the job. No "I am writing to express my interest".

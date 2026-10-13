@@ -1,0 +1,16 @@
+<!doctype html><html><body>
+<form>
+  <ul>
+    <li class="application-question"><label>Full name *<input name="name" required></label></li>
+    <li class="application-question"><label>Email *<input name="email" type="email" required></label></li>
+    <li class="application-question"><label>Current company<input name="org"></label></li>
+    <li class="application-question"><label>Resume/CV *<input name="resume" type="file" required></label></li>
+    <li class="application-question"><label>LinkedIn URL<input name="urls[LinkedIn]"></label></li>
+    <li class="application-question"><fieldset><legend>Do you have professional Python experience? *</legend>
+      <label><input type="radio" name="py" value="yes" required> Yes</label>
+      <label><input type="radio" name="py" value="no"> No</label></fieldset></li>
+  </ul>
+  <button type="submit">Submit application</button>
+</form>
+<script>document.querySelector("form").addEventListener("submit", e => { e.preventDefault(); if (!e.target.checkValidity()) return; document.body.innerHTML = "<h1>Thank you for applying!</h1>"; });</script>
+</body></html>

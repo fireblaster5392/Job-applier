@@ -1,0 +1,16 @@
+# SKILLS you'd defend in an interview. A tailored resume can only list skills from these groups.
+# PLACEHOLDER: replace with yours. Group names are yours to choose and print as written.
+groups:
+  Languages: [Python, TypeScript, SQL, Go]
+  Frameworks: [FastAPI, React, Spark, PyTorch, pytest]
+  Infrastructure: [Docker, Kubernetes, Terraform, PostgreSQL, AWS]
+
+# KEYWORDS: words job postings use -> the words in your files they mean. Used to match postings
+# to your bullets ("k8s" in a posting finds your Kubernetes work). Add any you notice.
+keywords:
+  k8s: [kubernetes]
+  ml: [machine learning, pytorch, scikit-learn]
+  etl: [data engineering, spark, pipeline]
+  observability: [monitoring, grafana, prometheus]
+  rest: [api, fastapi]
+  ci/cd: [ci, testing]

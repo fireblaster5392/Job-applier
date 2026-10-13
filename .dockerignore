@@ -1,0 +1,10 @@
+.git
+.env
+data/
+output/
+**/__pycache__
+*.pyc
+*.db
+*.db-wal
+*.db-shm
+profile/answers.yaml
