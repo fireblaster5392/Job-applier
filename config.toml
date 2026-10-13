@@ -62,7 +62,7 @@ min_gap_minutes = 4          # random gap between applications, between these tw
 max_gap_minutes = 12
 active_hours = [8, 22]       # local time
 timezone = "America/Edmonton"
-dry_run = false              # true: fill forms but never click Submit
+dry_run = true               # fill forms and send screenshots but never click Submit; set false once they look right
 # Browser agent for forms the generic filler can't do (Workday, iCIMS, Taleo, SmartRecruiters,
 # company portals). Claude drives the browser page by page, stops at the final Submit for your
 # review, and submits only after your Submit tap. Roughly $0.30-1.50 per application on Sonnet.
@@ -91,7 +91,13 @@ daily_hour = 9                      # local time
 timezone = "America/Edmonton"
 cooldown_days = 90                  # don't contact the same company again for this long
 followup_days = 5                   # one follow-up per person if they haven't replied (applies to job outreach too)
-# companies = ["linear", "ramp"]    # leave out to use every company in [prep]
+# companies = ["linear", "ramp"]    # leave out to use every company in [companies], startups first
+
+[mail]
+# Inbox sync reads replies and the companies' application emails (IMAP, read-only).
+model = "claude-haiku-5-5"
+
+[prep]
 # Interview prep sheet, drafted when an email says interview (or from the job page). Uses your
 # profile, profile/stories/*.md, what you sent, the interview email and a Brave search on the company.
 enabled = true
@@ -105,12 +111,6 @@ enabled = true
 weekday = 6                   # 0 = Monday ... 6 = Sunday
 hour = 18                     # local time
 timezone = "America/Edmonton"
-
-[companies], startups first
-
-[mail]
-# Inbox sync reads replies and the companies' application emails (IMAP, read-only).
-model = "claude-haiku-5-5"
 
 # Starter list of well-known tech companies. Slugs are the board name in each ATS URL,
 # e.g. boards.greenhouse.io/<slug>, jobs.lever.co/<slug>, jobs.ashbyhq.com/<slug>.
