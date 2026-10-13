@@ -8,3 +8,7 @@ data/
 *.db-shm
 profile/answers.yaml
 output/
+profile/notes/*
+!profile/notes/README.md
+profile/draft/
+profile/.backup/

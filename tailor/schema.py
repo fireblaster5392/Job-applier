@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 class SelectedBullet(BaseModel):
     id: str = Field(description="id of the source bullet in the master resume, copied exactly")
-    text: str = Field(description="the bullet, lightly reworded for this job; same facts and numbers as the source")
+    text: str = Field(description="the bullet, rewritten for this job and its recruiter; same facts and numbers as the source")
 
 
 class TailoredApplication(BaseModel):

@@ -42,7 +42,7 @@ and the step-by-step build order; read it first.
 The dashboard shows, per job: the tailored documents, application status, the company's emails,
 and every outreach message with its replies. The **Networking** page tracks the daily contacts.
 
-Tailoring may only pick and lightly reword bullets from your seed files in `profile/` (see [profile/README.md](profile/README.md)). Guardrails drop any
+Tailoring picks and rewrites bullets for each role (same facts and numbers) from your seed files in `profile/` (see [profile/README.md](profile/README.md)). Guardrails drop any
 bullet id that doesn't exist, revert rewrites that add numbers, and drop skills you don't list.
 
 Set `[pipeline] mode = "manual"` in `config.toml` to get every match in Telegram first and tap

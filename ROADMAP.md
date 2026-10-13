@@ -29,8 +29,8 @@ leaves their hands.
   Approve; every email needs its own Send tap. No auto-send "fast lane" unless the user turns it on.
 - **Never log into or automate the user's LinkedIn.** Find people through search APIs; the user
   sends LinkedIn messages themselves.
-- **No invented resume content.** Tailoring only selects and lightly rewords bullets from
-  the seed files in `profile/`; guardrails drop unknown bullets, new numbers and unlisted skills.
+- **No invented resume content.** Tailoring only selects and rewords bullets from
+  the seed files in `profile/`, keeping every fact and number; guardrails drop unknown bullets, new numbers and unlisted skills.
   Legal answers (work authorization, sponsorship, EEO) come verbatim from `profile/answers.yaml`.
 - **Human pacing, no evasion.** Applications are spaced out with daily caps. No CAPTCHA solvers,
   no fingerprint spoofing, no bypassing a site's protections: CAPTCHAs go to the user.
@@ -43,7 +43,7 @@ leaves their hands.
 | # | Step | Status |
 |---|---|---|
 | 1 | **Job watcher**: Greenhouse, Lever, Ashby APIs every 60 s, dedupe in SQLite | ✅ Built |
-| 2 | **Profile**: seed files (me, experience, project library, skills + keywords, format rules, answers) with a checker; job-search MCP server (stdio locally, HTTP `mcp` service on the VPS) that tailors from them | ✅ Built (placeholder data; user fills the seed) |
+| 2 | **Profile**: seed files (me, experience, project library, skills + keywords, format rules, answers) with a checker; a drafter that turns rough notes into recruiter-style bullets from several angles (`python -m profile_mcp.draft`); job-search MCP server (stdio locally, HTTP `mcp` service on the VPS) that tailors from them | ✅ Built (placeholder data; user fills the seed) |
 | 3 | **Fit scoring**: Haiku scores every match 0-100 | ✅ Built |
 | 3b | **Tailoring interface**: profile, scoring and tailoring behind one provider; built-in by default, or any MCP server that meets `docs/tailoring-server.md` | ✅ Built |
 | 4 | **Tailor first, approve once**: score ≥ threshold → tailored resume + cover letter → one Telegram message with Approve / Edit / Skip; lower scores listed on the dashboard | ✅ Built |

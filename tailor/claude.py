@@ -15,8 +15,12 @@ where every bullet has an id, and a job description.
 
 Rules:
 - Select bullets only from the master resume and copy their ids exactly.
-- You may lightly reword a bullet to mirror the job's language, but keep every fact and number
-  as written. Never add a technology, metric, employer or claim that isn't in the source.
+- Pick the bullets that sell this candidate for this job, and rewrite each the way a recruiter
+  for this role wants to read it: strong past-tense verb first, then what was built, how, and the
+  result; lead with what this job cares about; use the posting's terms where they name the same
+  thing the bullet describes (the posting says "REST APIs", the bullet says "endpoints"). Keep
+  every fact and number as written. Never add a technology, metric, employer or claim that
+  isn't in the source bullet, its role or project, or its metrics.
 - Skills must come from the candidate's skills list.
 - The cover letter may only reference experience in the master resume. Be specific and plain;
   no clichés like "I am writing to express my interest".

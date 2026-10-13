@@ -87,7 +87,7 @@ Same arguments as `score_fit`. Returns:
   "fit_reasons": ["2-4 short reasons"],
   "gaps": ["requirements the profile doesn't show"],
   "summary": "2-sentence resume summary aimed at this job, facts from the profile only",
-  "bullets": [{"id": "exco-api", "text": "the bullet, lightly reworded; same facts and numbers"}],
+  "bullets": [{"id": "exco-api", "text": "the bullet, rewritten for this job; same facts and numbers"}],
   "skills": ["Python", "FastAPI"],
   "cover_letter": "3 short paragraphs, plain text, no greeting or signature",
   "usage": {"model": "whatever-you-used", "input_tokens": 0, "output_tokens": 0}

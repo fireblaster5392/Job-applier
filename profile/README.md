@@ -15,6 +15,10 @@ profile/
   answers.yaml          job-application form answers (copy answers.example.yaml; never committed)
 ```
 
+Starting from scratch? Write rough notes in `profile/notes/` and run `python -m profile_mcp.draft`.
+It drafts experience.yaml, projects/ and skills.yaml for you, with recruiter-style bullets from
+several angles and questions where a number would help. See [notes/README.md](notes/README.md).
+
 After any edit, run this check:
 
 ```bash
@@ -28,7 +32,7 @@ so there's no restart.
 ## The one rule
 
 **Write bullets that are true as written.** Tailoring picks the bullets that fit each job and may
-lightly reword them to match the posting's language. It can't add a fact, tool, number or claim.
+rewrite them for the role, the way its recruiter wants to read them, using the posting's terms. It can't add a fact, tool, number or claim.
 A reworded bullet may only use a number if that number is in the bullet itself or in its role's or
 project's `metrics`. Anything else is reverted to your text, and the dashboard shows the fix. So
 put your real numbers in. More true bullets give it more to choose from.

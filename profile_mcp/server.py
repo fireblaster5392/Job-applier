@@ -23,7 +23,7 @@ from .profile import check_seed, default_profile
 OUTPUT_DIR = Path(os.environ.get("RESUME_OUTPUT_DIR", "output"))
 mcp = MCPServer("job-search", instructions=(
     "The candidate's profile (roles, project library, skills, resume format rules) and job pipeline. "
-    "Tailored resumes may only select and lightly reword bullets returned by search_experience or "
+    "Tailored resumes may only select and reword bullets returned by search_experience or "
     "get_resume_profile, keeping every fact and number, and must follow the profile's format rules."))
 
 
