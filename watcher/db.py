@@ -1,5 +1,6 @@
 """SQLite job store. Plain SQL with portable types so it moves to Postgres later."""
 import json
+import os
 import re
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -140,6 +141,8 @@ def now() -> str:
 class JobStore:
     def __init__(self, path: str):
         # check_same_thread=False: the dashboard and bot run tailoring in worker threads.
+        if path != ":memory:":
+            os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)   # e.g. a fresh data/ volume
         self.conn = sqlite3.connect(path, check_same_thread=False)
         self.conn.row_factory = sqlite3.Row
         self.conn.execute("PRAGMA journal_mode=WAL")
